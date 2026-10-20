@@ -2,11 +2,18 @@
 
 ## Estructura
 
-- `../SyntethicDataGenerator - Input/nombres_mexico_500.csv`: 250 nombres asociados a Mujer y 250 asociados a Hombre.
-- `../SyntethicDataGenerator - Input/apellidos_mexico_200.csv`: 200 apellidos.
-- `generador_clientes_sinteticos.ipynb`: construye clientes ficticios y los exporta a `output/`.
+- `generador_clientes_sinteticos.ipynb`: orquesta la carga de insumos, la generación, el control de calidad y la exportación a `DataOutput/`.
+- `config/`: todos los parámetros ajustables (`parametros.py`) y catálogos (`catalogos.py`): rutas, semilla, `N_CLIN`, fecha de corte, proporción por perfil, distribuciones de edad, salario y saldos, probabilidades, tasas de aportación y montos legales de referencia.
+- `generador/`: lógica (historial laboral por perfil, saldos RCV/AV/vivienda, reglas pensionarias, identificadores sintéticos y validación).
+- `DataInput/`: 250 nombres de mujer, 250 de hombre y 200 apellidos.
 
-Los archivos están codificados como UTF-8; la salida del notebook usa UTF-8 con BOM para abrirse correctamente en Excel.
+Los archivos están codificados como UTF-8; la salida usa UTF-8 con BOM para abrirse correctamente en Excel.
+
+## Reglas principales
+
+- IMSS: primera cotización desde el 01-07-1997 -> Ley 97; antes -> Ley 73. ISSSTE: Cuentas Individuales.
+- Cada cliente se genera por perfil (tipos 01 a 10 de `Reglas.rtf`), se clasifica con las reglas y se valida; `validacion_reglas` debe ser `OK` en el 100 % de los registros.
+- Montos en pesos constantes de la fecha de corte. Pensiones y resoluciones son estimaciones simuladas; la pensión garantizada y el Bono de Pensión son valores de referencia configurables.
 
 ## Criterio de las listas
 
