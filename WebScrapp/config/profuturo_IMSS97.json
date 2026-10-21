@@ -1,0 +1,52 @@
+{
+  "input": {
+    "path": "../../SyntethicDataGenerator/DataOutput/data_sintetética_20261021_123348.csv",
+    "encoding": "utf-8-sig"
+  },
+  "output": {
+    "path": "../DataOutput/profuturo_IMSS97_prueba.csv",
+    "encoding": "utf-8-sig"
+  },
+  "overwrite_output": true,
+  "filters": {
+    "institucion": "IMSS",
+    "regimen_pensionario": "IMSS_LEY_97",
+    "eleccion_regimen": "LEY_97",
+    "tipo_cliente": ["01", "02", "03"],
+    "validacion_reglas": "OK"
+  },
+  "require_positive_fields": ["ahorro_voluntario_mensual"],
+  "sample_size": 3,
+  "sample_strategy": "first_matching_rows",
+  "browser": {
+    "url": "https://afore.profuturo.mx/calculadora",
+    "headless": false,
+    "leave_browser_open": true,
+    "timeout_seconds": 30,
+    "result_wait_seconds": 30,
+    "pause_between_records_seconds": 1
+  },
+  "form": {
+    "date_input_format": "%m/%d/%Y",
+    "rounding": {
+      "years": 0,
+      "currency": 0,
+      "mode": "half_up"
+    },
+    "fields": {
+      "nombre": "nombre_completo",
+      "fecha_nacimiento": "fecha_nacimiento",
+      "edad": "edad",
+      "anios_cotizados": "anios_cotizados",
+      "saldo_actual_afore": "saldo_pensionario_utilizable",
+      "salario_mensual": "salario_mensual",
+      "genero": "genero",
+      "ahorro_voluntario_mensual": "ahorro_voluntario_mensual"
+    },
+    "genero": {
+      "H": "Hombre",
+      "M": "Mujer"
+    },
+    "ahorro_voluntario_mensual": "ahorro_voluntario_mensual"
+  }
+}

@@ -45,6 +45,15 @@ def _saldo_av(rng, salario, primera, ultima, densidad, rendimiento):
     return _acumular(salario, inicio, ultima, tasa, densidad, rendimiento)
 
 
+def simular_ahorro_voluntario_mensual(rng):
+    """Aportacion mensual pequena y poco frecuente, en pesos de la fecha de corte."""
+    parametros = cfg.AHORRO_VOLUNTARIO_MENSUAL
+    # La mayoria no aporta; para los demas sorteamos un monto acotado.
+    if rng.random() >= parametros['probabilidad']:
+        return 0.0
+    return round(lognormal_acotada(rng, parametros['monto']), 2)
+
+
 def _saldo_vivienda(rng, salario, primera, ultima, densidad):
     """Devuelve (saldo, historial de crédito). El crédito vigente absorbe las aportaciones."""
     c = cfg.VIVIENDA

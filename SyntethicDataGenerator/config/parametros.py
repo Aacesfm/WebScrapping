@@ -18,7 +18,7 @@ DIR_INPUT = DIR_BASE / 'DataInput'
 DIR_OUTPUT = DIR_BASE / 'DataOutput'
 ARCHIVO_NOMBRES = DIR_INPUT / 'nombres_mexico_500.csv'
 ARCHIVO_APELLIDOS = DIR_INPUT / 'apellidos_mexico_200.csv'
-PLANTILLA_ARCHIVO_SALIDA = 'clientes_sinteticos_{n}.csv'
+PLANTILLA_ARCHIVO_SALIDA = 'data_sintetética_{fecha_hora}.csv'
 CODIFICACION_ENTRADA = 'utf-8'
 CODIFICACION_SALIDA = 'utf-8-sig'  # Con BOM para que Excel conserve acentos y ñ.
 FORMATO_FECHA = '%Y-%m-%d'
@@ -68,16 +68,16 @@ REGIMEN_ISSSTE = 'ISSSTE_CUENTAS_INDIVIDUALES'
 NO_APLICA = 'NO_APLICA'
 
 RESULTADOS_POR_TIPO = {
-    '01': 'PENSION_RECURSOS_PROPIOS',
-    '02': 'PENSION_GARANTIZADA',
-    '03': 'NEGATIVA_PENSION',
-    '04': 'PENSION_ORDINARIA',
-    '05': 'PENSION_MINIMA_LEY_73',
-    '06': 'NEGATIVA_PENSION',
-    '07': 'PENSION_RECURSOS_PROPIOS',
-    '08': 'PENSION_GARANTIZADA',
-    '09': 'NEGATIVA_PENSION',
-    '10': 'SIN_AFILIACION_PENSIONARIA',
+    '01': 'IMSS97_RECURSOS_PROPIOS',
+    '02': 'IMSS97_PENSION_GARANTIZADA',
+    '03': 'IMSS97_NEGATIVA_PENSION',
+    '04': 'IMSS73_DERECHO_PENSION',
+    '05': 'IMSS73_GARANTIZADA',
+    '06': 'IMSS73_NEGATIVA_PENSION',
+    '07': 'ISSSTE_RECURSOS_PROPIOS',
+    '08': 'ISSSTE_PENSION_GARANTIZADA',
+    '09': 'ISSSTE_NEGATIVA_PENSION',
+    '10': 'INDEPENDIENTES',
 }
 
 # ---------------------------------------------------------------------------
@@ -211,6 +211,12 @@ AHORRO_VOLUNTARIO = dict(
     anios_minimos=1.0,
 )
 
+# Aportacion mensual actual; es distinta del saldo AV acumulado historicamente.
+AHORRO_VOLUNTARIO_MENSUAL = dict(
+    probabilidad=0.05,
+    monto=dict(mediana=500.0, sigma=0.60, min=100.0, max=1_999.99),
+)
+
 # 4) Saldo de vivienda (Infonavit / Fovissste).
 VIVIENDA = dict(
     tasa_aportacion=0.05,
@@ -270,7 +276,7 @@ COLUMNAS_SALIDA = [
     'fecha_primera_cotizacion', 'edad_primera_cotizacion', 'fecha_ultima_cotizacion',
     'semanas_cotizadas', 'anios_cotizados', 'semanas_imss', 'anios_issste',
     'salario_mensual', 'salario_base_cotizacion', 'sueldo_basico_issste',
-    'saldo_rcv', 'saldo_av', 'saldo_vivienda', 'historial_credito_vivienda',
+    'saldo_rcv', 'saldo_av', 'ahorro_voluntario_mensual', 'saldo_vivienda', 'historial_credito_vivienda',
     'saldo_bono_pension', 'saldo_pensionario_utilizable', 'beneficiarios', 'modalidad_pension',
     'pension_autofinanciable_estimada', 'pension_minima_legal_aplicable',
     'pension_final_estimada', 'resultado_pensionario', 'motivo_resultado',

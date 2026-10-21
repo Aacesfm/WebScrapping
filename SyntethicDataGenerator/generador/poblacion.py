@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import config as cfg
-from .finanzas import simular_saldos
+from .finanzas import simular_ahorro_voluntario_mensual, simular_saldos
 from .identificadores import generar_curp, generar_nss, generar_rfc
 from .pensiones import evaluar, regimen_de
 from .utilidades import edad_en, normal_truncada, repartir_por_proporcion
@@ -153,6 +153,11 @@ def generar_clientes(rng, nombres, apellidos):
         df[columna] = pd.to_datetime(df[columna])
     df['edad_primera_cotizacion'] = df['edad_primera_cotizacion'].astype('Int64')
     df['CURP'], df['RFC'], df['NSS'] = _identificadores(rng, df)
+    # Sorteamos al final para conservar los datos previos con la misma semilla.
+    df['ahorro_voluntario_mensual'] = [
+        simular_ahorro_voluntario_mensual(rng) if tiene_cuenta else 0.0
+        for tiene_cuenta in df['institucion'].notna()
+    ]
     df['resolucion_simulada'] = True
     df['validacion_reglas'] = validar_dataframe(df)
     return df[cfg.COLUMNAS_SALIDA]

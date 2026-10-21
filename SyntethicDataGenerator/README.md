@@ -14,6 +14,7 @@ Los archivos están codificados como UTF-8; la salida usa UTF-8 con BOM para abr
 - IMSS: primera cotización desde el 01-07-1997 -> Ley 97; antes -> Ley 73. ISSSTE: Cuentas Individuales.
 - Cada cliente se genera por perfil (tipos 01 a 10 de `Reglas.rtf`), se clasifica con las reglas y se valida; `validacion_reglas` debe ser `OK` en el 100 % de los registros.
 - Montos en pesos constantes de la fecha de corte. Pensiones y resoluciones son estimaciones simuladas; la pensión garantizada y el Bono de Pensión son valores de referencia configurables.
+- `ahorro_voluntario_mensual`: aportación mensual actual, distinta del `saldo_av` histórico y sin modificar el cálculo pensionario. Como supuesto sintético, el 5 % de los clientes con cuenta AFORE aporta entre $100 y $1,999.99, con distribución lognormal acotada y mediana de referencia de $500; el resto aporta $0. Los independientes no incorporados tienen $0. Se ajusta en `AHORRO_VOLUNTARIO_MENSUAL` de `config/parametros.py`.
 
 ## Criterio de las listas
 

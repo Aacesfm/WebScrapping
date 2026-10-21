@@ -105,6 +105,13 @@ def validar_registro(r):
         errores.append('edad no coincide con la fecha de nacimiento')
     if r['genero'] not in ('H', 'M'):
         errores.append('género debe ser H o M')
+    ahorro_mensual = r['ahorro_voluntario_mensual']
+    limites_ahorro = cfg.AHORRO_VOLUNTARIO_MENSUAL['monto']
+    if (pd.isna(ahorro_mensual)
+            or (ahorro_mensual != 0 and not limites_ahorro['min'] <= ahorro_mensual <= limites_ahorro['max'])):
+        errores.append('ahorro voluntario mensual fuera de rango')
+    if pd.isna(r['institucion']) and ahorro_mensual != 0:
+        errores.append('ahorro voluntario mensual debe ser 0 en independiente no incorporado')
     for campo in ('saldo_rcv', 'saldo_av', 'saldo_vivienda', 'saldo_bono_pension', 'saldo_pensionario_utilizable'):
         if r[campo] < 0:
             errores.append(f'{campo} negativo')
