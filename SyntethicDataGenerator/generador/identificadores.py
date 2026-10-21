@@ -31,6 +31,12 @@ def _consonante_interna(letras):
     return next((c for c in letras[1:] if c in _CONSONANTES), 'X')
 
 
+def codigo_entidad(estado):
+    texto = unicodedata.normalize('NFKD', str(estado).upper())
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    return cfg.CODIGOS_ENTIDAD.get(' '.join(texto.split()))
+
+
 def generar_curp(nombre, paterno, materno, nacimiento, genero, estado):
     """CURP de 18 caracteres con homoclave fija y dígito verificador calculado."""
     nombres = _tokens(nombre)
@@ -40,7 +46,7 @@ def generar_curp(nombre, paterno, materno, nacimiento, genero, estado):
         raise ValueError(f'Nombre sin letras válidas: {nombre!r}')
     if genero not in {'H', 'M'}:
         raise ValueError(f'Género no reconocido: {genero!r}')
-    entidad = cfg.CODIGOS_ENTIDAD.get(_normalizar(estado))
+    entidad = codigo_entidad(estado)
     if entidad is None:
         raise ValueError(f'Entidad federativa no reconocida: {estado!r}')
 
@@ -68,10 +74,34 @@ def generar_rfc(curp, rng):
 
 
 def generar_nss(rng, anio_afiliacion, anio_nacimiento):
-    """NSS de 11 dígitos con dígito verificador (Luhn)."""
+    """NSS sintético segmentado; no reproduce una fórmula oficial de asignación del IMSS."""
     cuerpo = f'{rng.integers(1, 100):02d}{anio_afiliacion % 100:02d}{anio_nacimiento % 100:02d}{rng.integers(0, 10_000):04d}'
     suma = 0
     for i, digito in enumerate(int(c) for c in cuerpo):
         producto = digito * (1 if i % 2 == 0 else 2)
         suma += producto - 9 if producto > 9 else producto
     return cuerpo + str((10 - suma % 10) % 10)
+
+
+def generar_correo(rng, nombre, paterno, materno, nacimiento, usados):
+    """Genera un correo único con una de las cuatro estructuras solicitadas."""
+    nombres = ''.join(_tokens(nombre)).lower()
+    paternos = ''.join(_tokens(paterno)).lower()
+    maternos = ''.join(_tokens(materno)).lower()
+    iniciales = nombres[0] + paternos[0] + maternos[0]
+    dominios = ('yahoo.com', 'gmail.com', 'hotmail.com', 'outlook.com')
+
+    while True:
+        plantilla = int(rng.integers(0, 4))
+        if plantilla == 0:
+            usuario = f'{nombres}_{nacimiento.year}{paternos}'
+        elif plantilla == 1:
+            usuario = f'{paternos[:3]}_{nombres}{int(rng.integers(0, 1_000_000)):06d}'
+        elif plantilla == 2:
+            usuario = f'{paternos}{maternos[0]}_{nacimiento.year}'
+        else:
+            usuario = f'{iniciales}{nacimiento:%d%m}_{nombres}'
+        correo = f'{usuario}@{rng.choice(dominios)}'
+        if correo not in usados:
+            usados.add(correo)
+            return correo

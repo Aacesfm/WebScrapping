@@ -16,6 +16,16 @@ Los archivos están codificados como UTF-8; la salida usa UTF-8 con BOM para abr
 - Montos en pesos constantes de la fecha de corte. Pensiones y resoluciones son estimaciones simuladas; la pensión garantizada y el Bono de Pensión son valores de referencia configurables.
 - `ahorro_voluntario_mensual`: aportación mensual actual, distinta del `saldo_av` histórico y sin modificar el cálculo pensionario. Como supuesto sintético, el 5 % de los clientes con cuenta AFORE aporta entre $100 y $1,999.99, con distribución lognormal acotada y mediana de referencia de $500; el resto aporta $0. Los independientes no incorporados tienen $0. Se ajusta en `AHORRO_VOLUNTARIO_MENSUAL` de `config/parametros.py`.
 
+## Layout de salida
+
+El CSV contiene las 22 columnas configuradas en `COLUMNAS_SALIDA`: `id_cliente`, nombre y apellidos, edad (`age`), nacimiento (`f_nacim`), género, clave CURP de entidad (`entidad`), NSS, CURP, correo, años truncados hacia abajo, año de afiliación (`anio_fil`), semanas (`sem_cot`), salario, saldos RCV/AV/vivienda, aportación mensual voluntaria y las etiquetas de régimen, ley y escenario estimados. La validación pensionaria se ejecuta sobre los campos internos antes de proyectar este layout.
+
+Los correos usan únicamente `yahoo.com`, `gmail.com`, `hotmail.com` y `outlook.com`, con una de las cuatro estructuras configuradas en `generador/identificadores.py`; se normalizan acentos y espacios y se evita repetir direcciones dentro del archivo.
+
+Al exportar, el notebook crea una subcarpeta nueva con fecha y hora dentro de `DataOutput/` y guarda tres archivos: `clientes_IMSS97.csv`, `clientes_IMSS73.csv` y `clientes_ISSSTE_Cuentas_Individuales.csv`. Los independientes con `regimen_estimado = NO_APLICA` no pertenecen a esos tres grupos y se reportan en pantalla, pero no se incluyen en los CSV.
+
+El IMSS confirma que el NSS consta de 11 dígitos y es único, permanente e intransferible. Su página pública de asignación/localización no documenta una fórmula oficial para construirlo. Por eso `nss` es un valor sintético con estructura segmentada y dígito de control para pruebas; no es un NSS asignado por el IMSS ni debe usarse para trámites o identificación real.
+
 ## Criterio de las listas
 
 Las listas son un insumo sintético, ordenado con nombres y apellidos ampliamente frecuentes en México. Para la orientación reciente de nombres se consideró la Estadística de Nacimientos Registrados 2024 de INEGI (reporta a Santiago y Sofía como los nombres más registrados). Para apellidos, el orden inicial coincide con la referencia de apellidos frecuentes de INEGI/Censo 2020, donde Hernández, García y Martínez encabezan el listado. No contienen datos de personas identificables.

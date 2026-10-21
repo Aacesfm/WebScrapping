@@ -269,16 +269,8 @@ FACTOR_EDAD_CESANTIA = {60: 0.75, 61: 0.80, 62: 0.85, 63: 0.90, 64: 0.95}  # 65 
 # Layout de salida
 # ---------------------------------------------------------------------------
 COLUMNAS_SALIDA = [
-    'id_cliente_sintetico', 'tipo_cliente', 'nombre', 'apellido_paterno', 'apellido_materno',
-    'nombre_completo', 'genero', 'fecha_nacimiento', 'edad', 'estado_nacimiento',
-    'estado_residencia', 'CURP', 'RFC', 'NSS', 'institucion', 'regimen_pensionario',
-    'eleccion_regimen', 'conservacion_derechos', 'estatus_laboral',
-    'fecha_primera_cotizacion', 'edad_primera_cotizacion', 'fecha_ultima_cotizacion',
-    'semanas_cotizadas', 'anios_cotizados', 'semanas_imss', 'anios_issste',
-    'salario_mensual', 'salario_base_cotizacion', 'sueldo_basico_issste',
-    'saldo_rcv', 'saldo_av', 'ahorro_voluntario_mensual', 'saldo_vivienda', 'historial_credito_vivienda',
-    'saldo_bono_pension', 'saldo_pensionario_utilizable', 'beneficiarios', 'modalidad_pension',
-    'pension_autofinanciable_estimada', 'pension_minima_legal_aplicable',
-    'pension_final_estimada', 'resultado_pensionario', 'motivo_resultado',
-    'resolucion_simulada', 'validacion_reglas',
+    'id_cliente', 'nombre', 'ap_paterno', 'ap_materno', 'age', 'f_nacim', 'genero',
+    'entidad', 'nss', 'curp', 'correo', 'anios_cotizados', 'anio_fil', 'sem_cot',
+    'salario_mensual', 'saldo_rcv', 'saldo_av', 'saldo_vivienda', 'av_mensual',
+    'regimen_estimado', 'ley_bandera', 'escenario_estimado',
 ]

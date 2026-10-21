@@ -7,7 +7,7 @@ import pandas as pd
 
 import config as cfg
 from .finanzas import simular_ahorro_voluntario_mensual, simular_saldos
-from .identificadores import generar_curp, generar_nss, generar_rfc
+from .identificadores import codigo_entidad, generar_correo, generar_curp, generar_nss, generar_rfc
 from .pensiones import evaluar, regimen_de
 from .utilidades import edad_en, normal_truncada, repartir_por_proporcion
 from .validacion import validar_dataframe
@@ -103,13 +103,18 @@ def _generar_cotizante(rng, tipo, genero, perfil):
 
 def _identificadores(rng, df):
     curps, rfcs, nsss = [], [], []
+    nsss_usados = set()
     for fila in df.itertuples():
         curp = generar_curp(fila.nombre, fila.apellido_paterno, fila.apellido_materno,
                             fila.fecha_nacimiento, fila.genero, fila.estado_nacimiento)
         curps.append(curp)
         rfcs.append(generar_rfc(curp, rng))
         if fila.institucion == cfg.INSTITUCION_IMSS:
-            nsss.append(generar_nss(rng, fila.fecha_primera_cotizacion.year, fila.fecha_nacimiento.year))
+            nss = generar_nss(rng, fila.fecha_primera_cotizacion.year, fila.fecha_nacimiento.year)
+            while nss in nsss_usados:
+                nss = generar_nss(rng, fila.fecha_primera_cotizacion.year, fila.fecha_nacimiento.year)
+            nsss_usados.add(nss)
+            nsss.append(nss)
         else:
             nsss.append(None)
     return curps, rfcs, nsss
@@ -153,6 +158,12 @@ def generar_clientes(rng, nombres, apellidos):
         df[columna] = pd.to_datetime(df[columna])
     df['edad_primera_cotizacion'] = df['edad_primera_cotizacion'].astype('Int64')
     df['CURP'], df['RFC'], df['NSS'] = _identificadores(rng, df)
+    correos_usados = set()
+    df['correo'] = [
+        generar_correo(rng, fila.nombre, fila.apellido_paterno, fila.apellido_materno,
+                       fila.fecha_nacimiento, correos_usados)
+        for fila in df.itertuples()
+    ]
     # Sorteamos al final para conservar los datos previos con la misma semilla.
     df['ahorro_voluntario_mensual'] = [
         simular_ahorro_voluntario_mensual(rng) if tiene_cuenta else 0.0
@@ -160,4 +171,37 @@ def generar_clientes(rng, nombres, apellidos):
     ]
     df['resolucion_simulada'] = True
     df['validacion_reglas'] = validar_dataframe(df)
+    invalidos = df[df['validacion_reglas'] != 'OK']
+    if not invalidos.empty:
+        muestra = invalidos[['id_cliente_sintetico', 'validacion_reglas']].head()
+        raise ValueError(f'{len(invalidos)} registros incumplen reglas:\n{muestra}')
+
+    codigos_entidad = df['estado_nacimiento'].map(codigo_entidad)
+    regimenes = df['regimen_pensionario'].map({
+        cfg.REGIMEN_LEY_97: 'IMSS97',
+        cfg.REGIMEN_LEY_73: 'IMSS73',
+        cfg.REGIMEN_ISSSTE: 'ISSSTE',
+        cfg.NO_APLICA: cfg.NO_APLICA,
+    })
+    leyes = df['regimen_pensionario'].map({
+        cfg.REGIMEN_LEY_97: 'LEY_97',
+        cfg.REGIMEN_LEY_73: 'LEY_73',
+        cfg.REGIMEN_ISSSTE: 'LEY_ISSSTE',
+        cfg.NO_APLICA: cfg.NO_APLICA,
+    })
+    df['id_cliente'] = df['id_cliente_sintetico']
+    df['ap_paterno'] = df['apellido_paterno']
+    df['ap_materno'] = df['apellido_materno']
+    df['age'] = df['edad']
+    df['f_nacim'] = df['fecha_nacimiento']
+    df['entidad'] = codigos_entidad
+    df['nss'] = df['NSS']
+    df['curp'] = df['CURP']
+    df['anios_cotizados'] = np.floor(df['anios_cotizados']).astype(int)
+    df['anio_fil'] = pd.to_datetime(df['fecha_primera_cotizacion']).dt.year.astype('Int64')
+    df['sem_cot'] = df['semanas_cotizadas']
+    df['av_mensual'] = df['ahorro_voluntario_mensual']
+    df['regimen_estimado'] = regimenes
+    df['ley_bandera'] = leyes
+    df['escenario_estimado'] = df['resultado_pensionario']
     return df[cfg.COLUMNAS_SALIDA]
