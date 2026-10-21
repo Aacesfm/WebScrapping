@@ -1,10 +1,13 @@
 import csv
 import json
+import os
+import re
 import time
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -16,18 +19,21 @@ RUTA_CONFIGURACION = (
 	/ 'config'
 	/ 'profuturo_IMSS97.json'
 )
-COLUMNAS_RESULTADO = [
-	'id_cliente_sintetico',
-	'nombre_completo',
-	'fecha_nacimiento_enviada',
-	'genero_enviado',
-	'anios_cotizados_enviados',
-	'saldo_afore_enviado',
-	'salario_mensual_enviado',
-	'ahorro_voluntario_mensual_enviado',
-	'estado',
-	'url_pagina_siguiente',
-]
+TEXTO_ULTIMO_SALARIO = 'Último salario cotizado'
+
+# Columna de salida -> patrón sobre el texto visible de la pantalla de resultados.
+PATRONES_WEB = {
+	'Pension_web': r'Pensión mensual\s*\$([\d,.]+)\s*Sin ahorro voluntario',
+	'pension_con_av_web': r'Pensión mensual\s*\$([\d,.]+)\s*Con ahorro voluntario',
+	'rcv_proy_web': r'Sin ahorro voluntario\s*\$([\d,.]+)\s*Total acumulado',
+	'rcv_av_proy_web': r'Con ahorro voluntario\s*\$([\d,.]+)\s*Total acumulado',
+	'sal_cot_web': r'Último salario cotizado\s*\$([\d,.]+)',
+	'tasa_remplazo_web': r'Tasa de reemplazo\s*([\d.]+)\s*%',
+	'tasa_rendimiento_web': r'Tasa de Rendimiento\s*(?:\d\s+)?([\d.]+)\s*%',
+	'densidad_cot_web': r'Densidad de cotización\s*(?:\d\s+)?([\d.]+)\s*%',
+}
+COLUMNAS_WEB = list(PATRONES_WEB) + ['observaciones']
+CAMPO_CHECKPOINT = 'id_checkpoint'
 
 
 def cargar_configuracion():
@@ -45,18 +51,23 @@ def cargar_configuracion():
 			configuracion[clave]['path'] = str(
 				(directorio_configuracion / ruta).resolve()
 			)
+	ruta_checkpoint = Path(configuracion['checkpoint']['path'])
+	if not ruta_checkpoint.is_absolute():
+		configuracion['checkpoint']['path'] = str(
+			(directorio_configuracion / ruta_checkpoint).resolve()
+		)
 	return configuracion
 
 
 def leer_clientes(configuracion):
-	"""Filtra el CSV y devuelve la muestra solicitada en el JSON."""
+	"""Filtra el CSV y devuelve hasta el máximo de clientes configurado."""
 	# ==============================================
 	# Leer: CSV y seleccionar clientes
 	# ==============================================
 	entrada = configuracion['input']
 	filtros = configuracion['filters']
-	campos_positivos = configuracion.get('require_positive_fields', [])
 	campos = configuracion['form']['fields']
+	max_clientes = configuracion['execution']['max_clients']
 
 	with open(entrada['path'], encoding=entrada['encoding'], newline='') as archivo:
 		lector = csv.DictReader(archivo)
@@ -68,16 +79,34 @@ def leer_clientes(configuracion):
 				else cliente.get(campo) == valores
 				for campo, valores in filtros.items()
 			)
-			cumple_campos_positivos = all(
-				Decimal(cliente.get(campo, '0')) > 0
-				for campo in campos_positivos
-			)
-			if (cumple_filtros and cumple_campos_positivos
-					and all(cliente.get(campo) for campo in campos.values())):
+			campos_requeridos = [
+				campo
+				for mapeo in campos.values()
+				for campo in (mapeo if isinstance(mapeo, list) else [mapeo])
+			]
+			if (cumple_filtros
+					and all(cliente.get(campo) not in (None, '') for campo in campos_requeridos)):
 				clientes.append(cliente)
-				if len(clientes) >= configuracion['sample_size']:
+				if len(clientes) >= max_clientes:
 					break
 	return clientes
+
+
+def obtener_valor(cliente, mapeo):
+	if isinstance(mapeo, list):
+		return ' '.join(cliente[campo].strip() for campo in mapeo if cliente[campo].strip())
+	return cliente[mapeo]
+
+
+def segundos_restantes(limite):
+	restantes = limite - time.monotonic()
+	if restantes <= 0:
+		raise TimeoutException('Se agotó el tiempo máximo para este cliente.')
+	return restantes
+
+
+def esperar(driver, limite):
+	return WebDriverWait(driver, segundos_restantes(limite))
 
 
 def redondear(valor, decimales):
@@ -91,8 +120,8 @@ def ingresar_texto(elemento, valor):
 	elemento.send_keys(str(valor))
 
 
-def agregar_campo(espera, etiqueta, valor):
-	campo = espera.until(
+def agregar_campo(driver, limite, etiqueta, valor):
+	campo = esperar(driver, limite).until(
 		EC.visibility_of_element_located(
 			(By.CSS_SELECTOR, '[aria-label="{}"]'.format(etiqueta))
 		)
@@ -100,9 +129,9 @@ def agregar_campo(espera, etiqueta, valor):
 	ingresar_texto(campo, valor)
 
 
-def seleccionar_genero(driver, genero, etiquetas, espera):
+def seleccionar_genero(driver, genero, etiquetas, limite):
 	etiqueta = etiquetas[genero]
-	control = espera.until(
+	control = esperar(driver, limite).until(
 		EC.element_to_be_clickable(
 			(By.CSS_SELECTOR, '[role="checkbox"][aria-label="{}"]'.format(etiqueta))
 		)
@@ -111,25 +140,27 @@ def seleccionar_genero(driver, genero, etiquetas, espera):
 		control.click()
 
 
-def completar_formulario(driver, cliente, configuracion):
+def completar_formulario(driver, cliente, configuracion, limite):
 	"""Llena los campos del cliente y envía la calculadora."""
 	navegador = configuracion['browser']
 	formulario = configuracion['form']
-	espera = WebDriverWait(driver, navegador['timeout_seconds'])
 	campos = formulario['fields']
 	redondeos = formulario['rounding']
 
 	# ==============================================
 	# Abrir: Calculadora de Profuturo
 	# ==============================================
+	driver.set_page_load_timeout(segundos_restantes(limite))
 	driver.get(navegador['url'])
 
 	# ==============================================
 	# Agregar: Nombre
 	# ==============================================
 	ingresar_texto(
-		espera.until(EC.visibility_of_element_located((By.NAME, 'nombre'))),
-		cliente[campos['nombre']],
+		esperar(driver, limite).until(
+			EC.visibility_of_element_located((By.NAME, 'nombre'))
+		),
+		obtener_valor(cliente, campos['nombre']),
 	)
 
 	# ==============================================
@@ -138,31 +169,32 @@ def completar_formulario(driver, cliente, configuracion):
 	fecha = time.strptime(cliente[campos['fecha_nacimiento']], '%Y-%m-%d')
 	fecha_texto = time.strftime(formulario['date_input_format'], fecha)
 	ingresar_texto(
-		espera.until(EC.visibility_of_element_located((By.CSS_SELECTOR, '.dp__input'))),
+		esperar(driver, limite).until(
+			EC.visibility_of_element_located((By.CSS_SELECTOR, '.dp__input'))
+		),
 		fecha_texto,
 	)
-	control_overlay = espera.until(
-		EC.element_to_be_clickable((By.CSS_SELECTOR, '[aria-label="Toggle overlay"]'))
-	)
-	# Cerramos el calendario para continuar con los demás controles.
-	control_overlay.click()
-	espera.until(
-		lambda navegador_actual: all(
-			not elemento.is_displayed()
-			for elemento in navegador_actual.find_elements(By.CSS_SELECTOR, '.dp__menu')
+	# Confirmamos la fecha al salir del campo y esperamos el valor interno del formulario.
+	driver.find_element(By.CSS_SELECTOR, '.dp__input').send_keys(Keys.TAB)
+	esperar(driver, limite).until(
+		lambda navegador_actual: bool(
+			navegador_actual.find_element(By.NAME, 'edad').get_attribute('value')
 		)
 	)
 
 	# ==============================================
 	# Seleccionar: Género
 	# ==============================================
-	seleccionar_genero(driver, cliente[campos['genero']], formulario['genero'], espera)
+	seleccionar_genero(
+		driver, cliente[campos['genero']], formulario['genero'], limite
+	)
 
 	# ==============================================
 	# Agregar: Años que has cotizado
 	# ==============================================
 	agregar_campo(
-		espera,
+		driver,
+		limite,
 		'Años que has cotizado',
 		redondear(cliente[campos['anios_cotizados']], redondeos['years']),
 	)
@@ -171,7 +203,8 @@ def completar_formulario(driver, cliente, configuracion):
 	# Agregar: Saldo actual en Afore
 	# ==============================================
 	agregar_campo(
-		espera,
+		driver,
+		limite,
 		'Saldo actual en Afore',
 		redondear(cliente[campos['saldo_actual_afore']], redondeos['currency']),
 	)
@@ -180,7 +213,8 @@ def completar_formulario(driver, cliente, configuracion):
 	# Agregar: Salario mensual
 	# ==============================================
 	agregar_campo(
-		espera,
+		driver,
+		limite,
 		'Salario mensual',
 		redondear(cliente[campos['salario_mensual']], redondeos['currency']),
 	)
@@ -189,7 +223,8 @@ def completar_formulario(driver, cliente, configuracion):
 	# Agregar: Ahorro voluntario mensual
 	# ==============================================
 	agregar_campo(
-		espera,
+		driver,
+		limite,
 		'Ahorro voluntario mensual',
 		redondear(
 			cliente[campos['ahorro_voluntario_mensual']], redondeos['currency']
@@ -199,7 +234,7 @@ def completar_formulario(driver, cliente, configuracion):
 	# ==============================================
 	# Click: Calcular mi pensión
 	# ==============================================
-	espera.until(
+	esperar(driver, limite).until(
 		EC.element_to_be_clickable(
 			(By.XPATH, "//button[contains(., 'Calcular mi pensión')]")
 		)
@@ -208,56 +243,167 @@ def completar_formulario(driver, cliente, configuracion):
 	# ==============================================
 	# Esperar: Carga de la página siguiente y detenerse
 	# ==============================================
-	WebDriverWait(driver, navegador['result_wait_seconds']).until(
+	esperar(driver, limite).until(
 		lambda navegador_actual: '/retiro-resumen' in navegador_actual.current_url
 	)
 	return driver.current_url
 
 
-def procesar_cliente(driver, cliente, configuracion):
-	navegador = configuracion['browser']
-	campos = configuracion['form']['fields']
-	url_siguiente = completar_formulario(driver, cliente, configuracion)
-	redondeos = configuracion['form']['rounding']
-	return {
-		'id_cliente_sintetico': cliente['id_cliente_sintetico'],
-		'nombre_completo': cliente[campos['nombre']],
-		'fecha_nacimiento_enviada': cliente[campos['fecha_nacimiento']],
-		'genero_enviado': cliente[campos['genero']],
-		'anios_cotizados_enviados': redondear(
-			cliente[campos['anios_cotizados']], redondeos['years']
-		),
-		'saldo_afore_enviado': redondear(
-			cliente[campos['saldo_actual_afore']], redondeos['currency']
-		),
-		'salario_mensual_enviado': redondear(
-			cliente[campos['salario_mensual']], redondeos['currency']
-		),
-		'ahorro_voluntario_mensual_enviado': redondear(
-			cliente[campos['ahorro_voluntario_mensual']], redondeos['currency']
-		),
-		'estado': 'calculado',
-		'url_pagina_siguiente': url_siguiente,
+def hay_pop_visible(driver):
+	return any(
+		pop.is_displayed()
+		for pop in driver.find_elements(By.CSS_SELECTOR, '.swal2-popup')
+	)
+
+
+def texto_pantalla(driver):
+	return driver.find_element(By.TAG_NAME, 'body').text
+
+
+def clasificar_pop(texto, observaciones):
+	if 'Negativa de pensión:' in texto:
+		return observaciones['pop_negativa_pension']
+	if 'Pensión mínima garantizada:' in texto:
+		return observaciones['pop_pension_garantizada']
+	return observaciones['pop_desconocido']
+
+
+def extraer_datos_web(driver, valor_faltante):
+	"""Lee las cifras visibles; lo que no aparezca se guarda como valor faltante."""
+	texto = texto_pantalla(driver)
+	datos = {}
+	for columna, patron in PATRONES_WEB.items():
+		coincidencia = re.search(patron, texto)
+		datos[columna] = (
+			coincidencia.group(1).replace(',', '') if coincidencia else valor_faltante
+		)
+	return datos
+
+
+def columnas_salida(columnas_entrada):
+	columnas = list(columnas_entrada)
+	for columna in ('nombre_completo',) + tuple(COLUMNAS_WEB) + (CAMPO_CHECKPOINT,):
+		if columna not in columnas:
+			columnas.append(columna)
+	return columnas
+
+
+def cargar_ids_guardados(ruta_salida, id_checkpoint):
+	if not ruta_salida.exists():
+		return set()
+	with ruta_salida.open(encoding='utf-8-sig', newline='') as archivo:
+		lector = csv.DictReader(archivo)
+		if id_checkpoint not in (lector.fieldnames or []):
+			raise ValueError(
+				'La salida existente no tiene la columna del checkpoint; '
+				'use un archivo de salida nuevo.'
+			)
+		return {fila[id_checkpoint] for fila in lector if fila.get(id_checkpoint)}
+
+
+def guardar_checkpoint(configuracion, checkpoint_id, procesados):
+	checkpoint = configuracion['checkpoint']
+	ruta = Path(checkpoint['path'])
+	ruta.parent.mkdir(parents=True, exist_ok=True)
+	temporal = ruta.with_suffix(ruta.suffix + '.tmp')
+	estado = {
+		'checkpoint_id': checkpoint_id,
+		'id_field': checkpoint['id_field'],
+		'processed_count': procesados,
+		'input_path': configuracion['input']['path'],
 	}
+	with temporal.open('w', encoding='utf-8') as archivo:
+		json.dump(estado, archivo, ensure_ascii=False, indent=2)
+		archivo.flush()
+		os.fsync(archivo.fileno())
+	temporal.replace(ruta)
 
 
-def guardar_resultados(resultados, configuracion):
+def guardar_chunk(chunk, columnas, configuracion):
+	if not chunk:
+		return
+	ruta = Path(configuracion['output']['path'])
+	ruta.parent.mkdir(parents=True, exist_ok=True)
+	escribir_cabecera = not ruta.exists() or ruta.stat().st_size == 0
+	with ruta.open('a', encoding=configuracion['output']['encoding'], newline='') as archivo:
+		escritor = csv.DictWriter(archivo, fieldnames=columnas, extrasaction='ignore')
+		if escribir_cabecera:
+			escritor.writeheader()
+		escritor.writerows(chunk)
+		archivo.flush()
+		os.fsync(archivo.fileno())
+
+	ultimo_id = chunk[-1][CAMPO_CHECKPOINT]
+	guardados = cargar_ids_guardados(ruta, CAMPO_CHECKPOINT)
+	guardar_checkpoint(configuracion, ultimo_id, len(guardados))
+
+
+def procesar_pantalla_resultados(driver, configuracion, limite):
+	"""Atiende el pop si aparece y extrae los datos; devuelve (datos, observación)."""
+	observaciones = configuracion['observaciones']
+
 	# ==============================================
-	# Guardar: Registro de datos enviados y estado
+	# Esperar: Pop de pensión garantizada o resultados directos
 	# ==============================================
-	salida = configuracion['output']
-	ruta_salida = Path(salida['path'])
-	if ruta_salida.exists() and not configuracion['overwrite_output']:
-		raise FileExistsError(
-			'El archivo de salida ya existe y overwrite_output está desactivado: '
-			+ str(ruta_salida)
+	esperar(driver, limite).until(
+		lambda d: hay_pop_visible(d) or TEXTO_ULTIMO_SALARIO in texto_pantalla(d)
+	)
+
+	# ==============================================
+	# Click: Ok en el pop (solo si apareció)
+	# ==============================================
+	observacion = observaciones['normal']
+	if hay_pop_visible(driver):
+		texto_pop = driver.find_element(By.CSS_SELECTOR, '.swal2-popup').text
+		observacion = clasificar_pop(texto_pop, observaciones)
+		esperar(driver, limite).until(
+			EC.element_to_be_clickable((By.CSS_SELECTOR, '.swal2-confirm'))
+		).click()
+		esperar(driver, limite).until(
+			lambda d: not hay_pop_visible(d)
 		)
 
-	ruta_salida.parent.mkdir(parents=True, exist_ok=True)
-	with ruta_salida.open('w', encoding=salida['encoding'], newline='') as archivo:
-		escritor = csv.DictWriter(archivo, fieldnames=COLUMNAS_RESULTADO)
-		escritor.writeheader()
-		escritor.writerows(resultados)
+	# ==============================================
+	# Extraer: Pensión, totales acumulados y tasas
+	# ==============================================
+	esperar(driver, limite).until(
+		lambda d: TEXTO_ULTIMO_SALARIO in texto_pantalla(d)
+	)
+	return extraer_datos_web(driver, configuracion['missing_value']), observacion
+
+
+def procesar_cliente(driver, cliente, configuracion):
+	"""Devuelve el registro de entrada más los resultados web y la observación."""
+	faltante = configuracion['missing_value']
+	registro = dict(cliente)
+	campos = configuracion['form']['fields']
+	registro['nombre_completo'] = obtener_valor(cliente, campos['nombre'])
+	registro.update({columna: faltante for columna in PATRONES_WEB})
+	registro['observaciones'] = faltante
+	registro[CAMPO_CHECKPOINT] = cliente[configuracion['checkpoint']['id_field']]
+	limite = time.monotonic() + configuracion['execution']['max_seconds_per_client']
+	try:
+		completar_formulario(driver, cliente, configuracion, limite)
+		datos, observacion = procesar_pantalla_resultados(driver, configuracion, limite)
+		registro.update(datos)
+		registro['observaciones'] = observacion
+	except TimeoutException:
+		registro['observaciones'] = configuracion['observaciones']['timeout'].format(
+			segundos=configuracion['execution']['max_seconds_per_client']
+		)
+	except Exception as error:
+		registro['observaciones'] = configuracion['observaciones']['error'].format(
+			tipo=type(error).__name__, mensaje=str(error).strip() or 'Sin detalle'
+		)
+		print('Error con el cliente {}: {}'.format(
+			cliente[configuracion['checkpoint']['id_field']], error
+		))
+	finally:
+		try:
+			driver.execute_script('window.stop();')
+		except Exception:
+			pass
+	return registro
 
 
 def main():
@@ -269,55 +415,77 @@ def main():
 	if not clientes:
 		raise ValueError('No se encontraron clientes que cumplan los filtros configurados.')
 
+	ruta_salida = Path(configuracion['output']['path'])
+	ruta_estado = Path(configuracion['checkpoint']['path'])
+	if ruta_estado.exists():
+		with ruta_estado.open(encoding='utf-8') as archivo:
+			estado_checkpoint = json.load(archivo)
+		if estado_checkpoint.get('input_path') != configuracion['input']['path']:
+			raise ValueError('El checkpoint pertenece a otro archivo de entrada.')
+	if ruta_salida.exists() and not configuracion['execution']['resume']:
+		raise FileExistsError('La salida existe y la reanudación está desactivada.')
+	if ruta_estado.exists() and not ruta_salida.exists():
+		raise FileNotFoundError('Existe un checkpoint, pero no se encuentra su CSV de salida.')
+
+	ids_guardados = cargar_ids_guardados(
+		ruta_salida, configuracion['checkpoint']['id_field']
+	) if ruta_salida.exists() else set()
+	pendientes = [
+		cliente for cliente in clientes
+		if cliente[configuracion['checkpoint']['id_field']] not in ids_guardados
+	]
+	if not pendientes:
+		print('Todos los clientes configurados ya están procesados.')
+		return
+
+	columnas = columnas_salida(list(clientes[0].keys()))
+	if ruta_salida.exists():
+		with ruta_salida.open(encoding='utf-8-sig', newline='') as archivo:
+			columnas_existentes = csv.reader(archivo).__next__()
+		if columnas_existentes != columnas:
+			raise ValueError('El esquema de la salida existente no coincide con el CSV actual.')
+
 	# ==============================================
 	# Abrir: Navegador para completar el formulario
 	# ==============================================
 	opciones = webdriver.ChromeOptions()
 	if configuracion['browser']['headless']:
 		opciones.add_argument('--headless=new')
-	if configuracion['browser'].get('leave_browser_open', False):
-		opciones.add_experimental_option('detach', True)
 	driver = webdriver.Chrome(options=opciones)
-	resultados = []
-	preservar_navegador = False
+	chunk = []
+	tamano_chunk = configuracion['execution']['chunk_size']
 	try:
-		for indice, cliente in enumerate(clientes):
-			try:
-				# ==============================================
-				# Procesar: Enviar un cliente y detenerse al avanzar
-				# ==============================================
-				print(
-					'Procesando cliente {} de {}: {}'.format(
-						indice + 1, len(clientes), cliente['id_cliente_sintetico']
-					)
+		for indice, cliente in enumerate(pendientes, start=len(ids_guardados)):
+			# ==============================================
+			# Procesar: Un cliente completo
+			# ==============================================
+			print(
+				'Procesando cliente {} de {}: {}'.format(
+					indice + 1, len(clientes),
+					cliente[configuracion['checkpoint']['id_field']]
 				)
-				registro = procesar_cliente(driver, cliente, configuracion)
-				resultados.append(registro)
-				preservar_navegador = configuracion['browser'].get(
-					'leave_browser_open', False
+			)
+			registro = procesar_cliente(driver, cliente, configuracion)
+			chunk.append(registro)
+			if len(chunk) >= tamano_chunk:
+				guardar_chunk(chunk, columnas, configuracion)
+				ids_guardados.update(
+					fila[CAMPO_CHECKPOINT] for fila in chunk
 				)
-				print('Página siguiente cargada; se detiene este cliente.')
-				break
-			except Exception as error:
-				resultados.append({
-					'id_cliente_sintetico': cliente['id_cliente_sintetico'],
-					'nombre_completo': cliente.get('nombre_completo', ''),
-					'estado': 'error',
-					'url_pagina_siguiente': '',
-				})
-				print('Error con el cliente {}: {}'.format(
-					cliente['id_cliente_sintetico'], error
-				))
-			time.sleep(configuracion['browser']['pause_between_records_seconds'])
+				print('Checkpoint guardado: {}'.format(chunk[-1][CAMPO_CHECKPOINT]))
+				chunk = []
+			if configuracion['browser']['pause_between_records_seconds'] > 0:
+				time.sleep(configuracion['browser']['pause_between_records_seconds'])
+		if chunk:
+			guardar_chunk(chunk, columnas, configuracion)
+			print('Checkpoint guardado: {}'.format(chunk[-1][CAMPO_CHECKPOINT]))
 	finally:
-		if not preservar_navegador:
-			# ==============================================
-			# Cerrar: Navegador si no se alcanzó la página siguiente
-			# ==============================================
-			driver.quit()
+		# ==============================================
+		# Cerrar: Navegador
+		# ==============================================
+		driver.quit()
 
-	guardar_resultados(resultados, configuracion)
-	print('Resultados guardados en: {}'.format(configuracion['output']['path']))
+	print('Procesamiento terminado. CSV: {}'.format(configuracion['output']['path']))
 
 
 if __name__ == '__main__':

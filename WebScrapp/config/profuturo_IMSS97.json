@@ -21,6 +21,8 @@
   "observaciones": {
     "normal": "Termino el ciclo normal",
     "pop_pension_garantizada": "Se clasifico como pensión mínima garantizada",
+    "pop_negativa_pension": "Se clasifico como negativa de pensión",
+    "pop_desconocido": "Aparecio un pop no identificado",
     "timeout": "No continuo despues de {segundos} segundos de espera",
     "error": "Error inesperado ({tipo}): {mensaje}"
   },
