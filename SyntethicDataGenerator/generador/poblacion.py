@@ -7,7 +7,7 @@ import pandas as pd
 
 import config as cfg
 from .finanzas import simular_ahorro_voluntario_mensual, simular_saldos
-from .identificadores import codigo_entidad, generar_correo, generar_curp, generar_nss, generar_rfc
+from .identificadores import codigo_entidad, generar_correo, generar_curp, generar_nss, generar_num_issste, generar_rfc
 from .pensiones import evaluar, regimen_de
 from .utilidades import edad_en, normal_truncada, repartir_por_proporcion
 from .validacion import validar_dataframe
@@ -30,6 +30,7 @@ def _registro_base(genero, nacimiento, edad, salario):
         'semanas_imss': 0, 'anios_issste': 0.0,
         'salario_base_cotizacion': None, 'sueldo_basico_issste': None,
         'saldo_rcv': 0.0, 'saldo_av': 0.0, 'saldo_vivienda': 0.0,
+        'saldo_ahorro_solidario': 0.0, 'porcentaje_ahorro_solidario': None,
         'historial_credito_vivienda': cfg.NO_APLICA, 'bono_potencial': 0.0,
         'beneficiarios': None, 'modalidad_pension': None,
     }
@@ -85,6 +86,12 @@ def _generar_cotizante(rng, tipo, genero, perfil):
             registro.update(semanas_imss=registro['semanas_cotizadas'], salario_base_cotizacion=round(salario / cfg.DIAS_POR_MES, 2))
         else:
             registro.update(anios_issste=registro['anios_cotizados'], sueldo_basico_issste=salario)
+            parametros_ahorro = cfg.AHORRO_SOLIDARIO_ISSSTE
+            porcentaje = float(rng.uniform(parametros_ahorro['porcentaje_min'], parametros_ahorro['porcentaje_max']))
+            registro.update(
+                porcentaje_ahorro_solidario=porcentaje,
+                saldo_ahorro_solidario=round(registro['saldo_rcv'] * porcentaje / 100, 2),
+            )
         if regimen != cfg.REGIMEN_LEY_73:
             registro.update(
                 beneficiarios='SI' if rng.random() < cfg.PROB_BENEFICIARIOS else 'NO',
@@ -102,8 +109,9 @@ def _generar_cotizante(rng, tipo, genero, perfil):
 
 
 def _identificadores(rng, df):
-    curps, rfcs, nsss = [], [], []
+    curps, rfcs, nsss, numeros_issste = [], [], [], []
     nsss_usados = set()
+    numeros_issste_usados = set()
     for fila in df.itertuples():
         curp = generar_curp(fila.nombre, fila.apellido_paterno, fila.apellido_materno,
                             fila.fecha_nacimiento, fila.genero, fila.estado_nacimiento)
@@ -115,9 +123,18 @@ def _identificadores(rng, df):
                 nss = generar_nss(rng, fila.fecha_primera_cotizacion.year, fila.fecha_nacimiento.year)
             nsss_usados.add(nss)
             nsss.append(nss)
+            numeros_issste.append(None)
+        elif fila.institucion == cfg.INSTITUCION_ISSSTE:
+            numero = generar_num_issste(rng, fila.fecha_primera_cotizacion.year, fila.fecha_nacimiento.year)
+            while numero in numeros_issste_usados:
+                numero = generar_num_issste(rng, fila.fecha_primera_cotizacion.year, fila.fecha_nacimiento.year)
+            numeros_issste_usados.add(numero)
+            nsss.append(None)
+            numeros_issste.append(numero)
         else:
             nsss.append(None)
-    return curps, rfcs, nsss
+            numeros_issste.append(None)
+    return curps, rfcs, nsss, numeros_issste
 
 
 def generar_clientes(rng, nombres, apellidos):
@@ -157,7 +174,7 @@ def generar_clientes(rng, nombres, apellidos):
     for columna in ('fecha_nacimiento', 'fecha_primera_cotizacion', 'fecha_ultima_cotizacion'):
         df[columna] = pd.to_datetime(df[columna])
     df['edad_primera_cotizacion'] = df['edad_primera_cotizacion'].astype('Int64')
-    df['CURP'], df['RFC'], df['NSS'] = _identificadores(rng, df)
+    df['CURP'], df['RFC'], df['NSS'], df['num_issste'] = _identificadores(rng, df)
     correos_usados = set()
     df['correo'] = [
         generar_correo(rng, fila.nombre, fila.apellido_paterno, fila.apellido_materno,

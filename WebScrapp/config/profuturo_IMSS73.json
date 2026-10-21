@@ -1,0 +1,66 @@
+{
+  "input": {
+    "path": "../../SyntethicDataGenerator/DataOutput/20261021_153927_012422/clientes_IMSS73.csv",
+    "encoding": "utf-8-sig"
+  },
+  "output": {
+    "path": "../DataOutput/profuturo_IMSS73_resultados_web.csv",
+    "encoding": "utf-8-sig"
+  },
+  "execution": {
+    "max_clients": 31000,
+    "max_seconds_per_client": 20,
+    "chunk_size": 5,
+    "resume": true
+  },
+  "checkpoint": {
+    "path": "../DataOutput/profuturo_IMSS73_completa_checkpoint.json",
+    "id_field": "id_cliente"
+  },
+  "missing_value": "NaN",
+  "results": {
+    "retirement_age": 65
+  },
+  "observaciones": {
+    "normal": "Termino el ciclo normal",
+    "pop_pension_garantizada": "Se clasifico como pensión mínima garantizada",
+    "pop_negativa_pension": "Se clasifico como negativa de pensión",
+    "pop_desconocido": "Aparecio un pop no identificado",
+    "timeout": "No continuo despues de {segundos} segundos de espera",
+    "error": "Error inesperado ({tipo}): {mensaje}"
+  },
+  "filters": {
+    "regimen_estimado": "IMSS73",
+    "ley_bandera": "LEY_73"
+  },
+  "browser": {
+    "url": "https://afore.profuturo.mx/calculadora",
+    "headless": false,
+    "timeout_seconds": 20,
+    "result_wait_seconds": 20,
+    "pause_between_records_seconds": 0
+  },
+  "form": {
+    "ley_checkbox": "Ley del 73",
+    "date_input_format": "%d/%m/%Y",
+    "rounding": {
+      "years": 0,
+      "currency": 0,
+      "mode": "half_up"
+    },
+    "fields": {
+      "nombre": ["nombre", "ap_paterno", "ap_materno"],
+      "fecha_nacimiento": "f_nacim",
+      "edad": "age",
+      "anios_cotizados": "anios_cotizados",
+      "saldo_actual_afore": null,
+      "salario_mensual": "salario_mensual",
+      "genero": null,
+      "ahorro_voluntario_mensual": null
+    },
+    "genero": {
+      "H": "Hombre",
+      "M": "Mujer"
+    }
+  }
+}

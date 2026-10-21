@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 import config as cfg
+from .identificadores import calcular_digito_verificador
 from .pensiones import evaluar, regimen_de
 from .utilidades import a_fecha, edad_en
 
@@ -112,9 +113,11 @@ def validar_registro(r):
         errores.append('ahorro voluntario mensual fuera de rango')
     if pd.isna(r['institucion']) and ahorro_mensual != 0:
         errores.append('ahorro voluntario mensual debe ser 0 en independiente no incorporado')
-    for campo in ('saldo_rcv', 'saldo_av', 'saldo_vivienda', 'saldo_bono_pension', 'saldo_pensionario_utilizable'):
+    for campo in ('saldo_rcv', 'saldo_av', 'saldo_vivienda', 'saldo_ahorro_solidario', 'saldo_bono_pension', 'saldo_pensionario_utilizable'):
         if r[campo] < 0:
             errores.append(f'{campo} negativo')
+    if r['saldo_bono_pension'] > cfg.BONO_PENSION_ISSSTE['saldo_max']:
+        errores.append('saldo de Bono de Pensión ISSSTE excede el tope sintético')
     if r['salario_mensual'] < cfg.SALARIO_MINIMO_DIARIO * cfg.DIAS_POR_MES:
         errores.append('salario inferior al mínimo')
     if r['resolucion_simulada'] is not True and r['resolucion_simulada'] is not np.True_:
@@ -126,6 +129,24 @@ def validar_registro(r):
     if (len(curp) != 18 or curp[4:10] != nacimiento.strftime('%y%m%d') or curp[10] != r['genero']
             or str(r['RFC'])[:10] != curp[:10]):
         errores.append('CURP/RFC incoherentes con los datos demográficos')
+
+    if r['institucion'] == cfg.INSTITUCION_ISSSTE:
+        numero_issste = str(r['num_issste'])
+        porcentaje = r['porcentaje_ahorro_solidario']
+        if len(numero_issste) != 11 or not numero_issste.isdigit():
+            errores.append('num_issste debe contener 11 dígitos')
+        elif int(numero_issste[-1]) != calcular_digito_verificador(numero_issste[:10]):
+            errores.append('dígito verificador de num_issste inválido')
+        parametros_ahorro = cfg.AHORRO_SOLIDARIO_ISSSTE
+        if pd.isna(porcentaje) or not parametros_ahorro['porcentaje_min'] <= porcentaje <= parametros_ahorro['porcentaje_max']:
+            errores.append('porcentaje de ahorro solidario ISSSTE fuera de rango')
+        elif abs(r['saldo_ahorro_solidario'] - r['saldo_rcv'] * porcentaje / 100) > 0.01:
+            errores.append('saldo de ahorro solidario no coincide con el porcentaje aplicado al RCV')
+    else:
+        if pd.notna(r['num_issste']):
+            errores.append('num_issste debe ser nulo fuera de ISSSTE')
+        if r['saldo_ahorro_solidario'] != 0 or pd.notna(r['porcentaje_ahorro_solidario']):
+            errores.append('ahorro solidario debe ser nulo o 0 fuera de ISSSTE')
 
     if pd.isna(r['institucion']):
         _validar_independiente(r, errores)

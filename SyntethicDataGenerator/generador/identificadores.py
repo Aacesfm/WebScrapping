@@ -76,11 +76,22 @@ def generar_rfc(curp, rng):
 def generar_nss(rng, anio_afiliacion, anio_nacimiento):
     """NSS sintético segmentado; no reproduce una fórmula oficial de asignación del IMSS."""
     cuerpo = f'{rng.integers(1, 100):02d}{anio_afiliacion % 100:02d}{anio_nacimiento % 100:02d}{rng.integers(0, 10_000):04d}'
+    return cuerpo + str(calcular_digito_verificador(cuerpo))
+
+
+def calcular_digito_verificador(cuerpo):
+    """Calcula el DV alternando factores 1 y 2 y sumando dígitos de productos."""
     suma = 0
     for i, digito in enumerate(int(c) for c in cuerpo):
         producto = digito * (1 if i % 2 == 0 else 2)
-        suma += producto - 9 if producto > 9 else producto
-    return cuerpo + str((10 - suma % 10) % 10)
+        suma += producto // 10 + producto % 10
+    return (10 - suma % 10) % 10
+
+
+def generar_num_issste(rng, anio_afiliacion, anio_nacimiento):
+    """Genera un identificador ISSSTE sintético de 10 dígitos más su DV."""
+    cuerpo = f'{rng.integers(1, 100):02d}{anio_afiliacion % 100:02d}{anio_nacimiento % 100:02d}{rng.integers(0, 10_000):04d}'
+    return cuerpo + str(calcular_digito_verificador(cuerpo))
 
 
 def generar_correo(rng, nombre, paterno, materno, nacimiento, usados):

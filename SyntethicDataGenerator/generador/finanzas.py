@@ -88,7 +88,8 @@ def _bono_pension(salario, primera, ultima, densidad):
     anios_2007_a_baja = max(0.0, (ultima - cfg.FECHA_ISSSTE_2007).days / cfg.DIAS_POR_ANIO)
     salario_2007 = salario * (1 + cfg.CRECIMIENTO_REAL_SALARIO) ** (-anios_2007_a_baja)
     anios_a_corte = (cfg.FECHA_CORTE - cfg.FECHA_ISSSTE_2007).days / cfg.DIAS_POR_ANIO
-    return salario_2007 * 12 * anios_previos * c['factor_salario_anual'] * (1 + c['rendimiento_real']) ** anios_a_corte
+    saldo = salario_2007 * 12 * anios_previos * c['factor_salario_anual'] * (1 + c['rendimiento_real']) ** anios_a_corte
+    return min(saldo, c['saldo_max'])
 
 
 def simular_saldos(rng, regimen, salario, primera, ultima, densidad):

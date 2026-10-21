@@ -18,7 +18,7 @@ Los archivos están codificados como UTF-8; la salida usa UTF-8 con BOM para abr
 
 ## Layout de salida
 
-El CSV contiene las 22 columnas configuradas en `COLUMNAS_SALIDA`: `id_cliente`, nombre y apellidos, edad (`age`), nacimiento (`f_nacim`), género, clave CURP de entidad (`entidad`), NSS, CURP, correo, años truncados hacia abajo, año de afiliación (`anio_fil`), semanas (`sem_cot`), salario, saldos RCV/AV/vivienda, aportación mensual voluntaria y las etiquetas de régimen, ley y escenario estimados. La validación pensionaria se ejecuta sobre los campos internos antes de proyectar este layout.
+El CSV contiene las columnas configuradas en `COLUMNAS_SALIDA`: `id_cliente`, nombre y apellidos, edad (`age`), nacimiento (`f_nacim`), género, clave CURP de entidad (`entidad`), NSS, número ISSSTE (`num_issste`), CURP, correo, años truncados hacia abajo, año de afiliación (`anio_fil`), semanas (`sem_cot`), salario, saldos RCV, ahorro solidario, Bono de Pensión, AV y vivienda, porcentaje de ahorro solidario ISSSTE, aportación mensual voluntaria y las etiquetas de régimen, ley y escenario estimados. El número ISSSTE es sintético, de 10 dígitos más DV; el ahorro solidario se estima entre 1% y 2% del saldo RCV y el Bono de Pensión se limita a $350,000. Los campos ISSSTE quedan nulos o en cero para los demás regímenes. La validación pensionaria se ejecuta sobre los campos internos antes de proyectar este layout.
 
 Los correos usan únicamente `yahoo.com`, `gmail.com`, `hotmail.com` y `outlook.com`, con una de las cuatro estructuras configuradas en `generador/identificadores.py`; se normalizan acentos y espacios y se evita repetir direcciones dentro del archivo.
 

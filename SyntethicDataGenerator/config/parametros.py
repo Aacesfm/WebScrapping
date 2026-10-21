@@ -228,7 +228,8 @@ VIVIENDA = dict(
 )
 
 # Bono de Pensión ISSSTE (sólo con elección de Cuentas Individuales y requisitos cumplidos).
-BONO_PENSION_ISSSTE = dict(factor_salario_anual=0.25, rendimiento_real=0.02)   # REFERENCIAL.
+BONO_PENSION_ISSSTE = dict(factor_salario_anual=0.25, rendimiento_real=0.02, saldo_max=350_000.0)   # REFERENCIAL.
+AHORRO_SOLIDARIO_ISSSTE = dict(porcentaje_min=1.0, porcentaje_max=2.0)
 
 # ---------------------------------------------------------------------------
 # Estimación pensionaria
@@ -270,7 +271,8 @@ FACTOR_EDAD_CESANTIA = {60: 0.75, 61: 0.80, 62: 0.85, 63: 0.90, 64: 0.95}  # 65 
 # ---------------------------------------------------------------------------
 COLUMNAS_SALIDA = [
     'id_cliente', 'nombre', 'ap_paterno', 'ap_materno', 'age', 'f_nacim', 'genero',
-    'entidad', 'nss', 'curp', 'correo', 'anios_cotizados', 'anio_fil', 'sem_cot',
-    'salario_mensual', 'saldo_rcv', 'saldo_av', 'saldo_vivienda', 'av_mensual',
+    'entidad', 'nss', 'num_issste', 'curp', 'correo', 'anios_cotizados', 'anio_fil', 'sem_cot',
+    'salario_mensual', 'saldo_rcv', 'saldo_ahorro_solidario', 'porcentaje_ahorro_solidario',
+    'saldo_bono_pension', 'saldo_av', 'saldo_vivienda', 'av_mensual',
     'regimen_estimado', 'ley_bandera', 'escenario_estimado',
 ]
