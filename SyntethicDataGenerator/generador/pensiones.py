@@ -96,16 +96,28 @@ def evaluar(r):
     salida['regimen_pensionario'] = regimen
     salida['eleccion_regimen'] = eleccion_de(regimen, r['fecha_primera_cotizacion'])
     semanas, anios = r['semanas_cotizadas'], r['anios_cotizados']
-    elegible = r['edad'] >= cfg.EDAD_MINIMA_PENSION and r['estatus_laboral'] == 'BAJA'
-    if not elegible:
-        return _resultado(salida, None, 'No cumple edad mínima o no está dado de baja.')
+    if r['estatus_laboral'] != 'BAJA':
+        return _resultado(salida, None, 'No está dado de baja.')
 
     saldo = r['saldo_rcv'] + r['saldo_av']
-    salida['saldo_pensionario_utilizable'] = round(saldo, 2)
-
     if regimen == cfg.REGIMEN_LEY_73:
         vigente = conserva_derechos(r['fecha_ultima_cotizacion'], semanas)
         salida['conservacion_derechos'] = 'SI' if vigente else 'NO'
+    if regimen == cfg.REGIMEN_ISSSTE and anios >= cfg.ANIOS_MIN_ISSSTE:
+        bono = r['bono_potencial']
+        salida['saldo_bono_pension'] = bono
+        saldo += bono
+    salida['saldo_pensionario_utilizable'] = round(saldo, 2)
+
+    if r['edad'] < cfg.EDAD_MINIMA_PENSION:
+        tipo_proyeccion = {
+            cfg.REGIMEN_LEY_97: '11',
+            cfg.REGIMEN_LEY_73: '12',
+            cfg.REGIMEN_ISSSTE: '13',
+        }[regimen]
+        return _resultado(salida, tipo_proyeccion, 'Proyección previa a la edad mínima de pensión; no es una resolución pensionaria.')
+
+    if regimen == cfg.REGIMEN_LEY_73:
         if semanas < cfg.SEMANAS_MIN_LEY_73:
             return _resultado(salida, '06', f'Ley 73 con {semanas} semanas; se requieren {cfg.SEMANAS_MIN_LEY_73}.')
         if not vigente:
@@ -120,12 +132,6 @@ def evaluar(r):
         if calculada > minima:
             return _resultado(salida, '04', 'Cuantía Ley 73 superior a la pensión mínima legal.')
         return _resultado(salida, '05', 'Cuantía Ley 73 inferior al mínimo; se aplica el piso legal.')
-
-    if regimen == cfg.REGIMEN_ISSSTE and anios >= cfg.ANIOS_MIN_ISSSTE:
-        bono = r['bono_potencial']
-        salida['saldo_bono_pension'] = bono
-        saldo += bono
-        salida['saldo_pensionario_utilizable'] = round(saldo, 2)
 
     requisito_cumplido = semanas >= cfg.SEMANAS_MIN_LEY_97 if regimen == cfg.REGIMEN_LEY_97 else anios >= cfg.ANIOS_MIN_ISSSTE
     autofinanciable = saldo / factor_actuarial(r['genero'], r['edad'], r['beneficiarios'], r['modalidad_pension'])

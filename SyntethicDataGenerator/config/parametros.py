@@ -31,8 +31,8 @@ GENEROS_ARCHIVO = {'Mujer': 'M', 'Hombre': 'H'}  # Valor en el CSV -> código us
 # ---------------------------------------------------------------------------
 # Ejecución
 # ---------------------------------------------------------------------------
-SEMILLA = 20261019            # Misma semilla -> misma población sintética.
-N_CLIN = 100_000                # Número exacto de clientes a generar.
+SEMILLA = 20261022            # Misma semilla -> misma población sintética.
+N_CLIN = 10_000                # Número exacto de clientes a generar.
 FECHA_CORTE = date(2026, 10, 19)
 MAX_INTENTOS_POR_CLIENTE = 50_000
 PROPORCION_MUJERES = 0.5
@@ -78,6 +78,9 @@ RESULTADOS_POR_TIPO = {
     '08': 'ISSSTE_PENSION_GARANTIZADA',
     '09': 'ISSSTE_NEGATIVA_PENSION',
     '10': 'INDEPENDIENTES',
+    '11': 'IMSS97_PROYECCION',
+    '12': 'IMSS73_PROYECCION',
+    '13': 'ISSSTE_PROYECCION',
 }
 
 # ---------------------------------------------------------------------------
@@ -93,8 +96,8 @@ PERFILES = {
     '01': {
         'descripcion': 'IMSS Ley 97 - pensión con recursos propios',
         'institucion': INSTITUCION_IMSS, 'proporcion': 0.08,
-        'edad': dict(media=62, desv=3, min=60, max=70),
-        'edad_primera_cotizacion': dict(media=37, desv=4, min=31, max=50),
+        'edad': dict(media=44, desv=12, min=18, max=64),
+        'edad_primera_cotizacion': dict(media=37, desv=10, min=18, max=50),
         'primera_cotizacion': {'desde': FECHA_LEY_97},
         'semanas': dict(media=1200, desv=250, min=875, max=1900),
         'salario': dict(media=50_000, desv=10_000, min=35_000, max=85_000),
@@ -102,32 +105,32 @@ PERFILES = {
     '02': {
         'descripcion': 'IMSS Ley 97 - pensión garantizada',
         'institucion': INSTITUCION_IMSS, 'proporcion': 0.17,
-        'edad': dict(media=63, desv=3, min=60, max=72),
-        'edad_primera_cotizacion': dict(media=37, desv=4, min=31, max=50),
+        'edad': dict(media=55, desv=9, min=18, max=64),
+        'edad_primera_cotizacion': dict(media=37, desv=10, min=18, max=50),
         'primera_cotizacion': {'desde': FECHA_LEY_97},
         'semanas': dict(media=1250, desv=250, min=875, max=1900),
     },
     '03': {
         'descripcion': 'IMSS Ley 97 - negativa de pensión (semanas insuficientes)',
         'institucion': INSTITUCION_IMSS, 'proporcion': 0.08,
-        'edad': dict(media=63, desv=3, min=60, max=72),
-        'edad_primera_cotizacion': dict(media=40, desv=4, min=31, max=55),
+        'edad': dict(media=40, desv=13, min=18, max=64),
+        'edad_primera_cotizacion': dict(media=40, desv=10, min=18, max=55),
         'primera_cotizacion': {'desde': FECHA_LEY_97},
         'semanas': dict(media=500, desv=150, min=100, max=874),
     },
     '04': {
         'descripcion': 'IMSS Ley 73 - pensión ordinaria superior al mínimo',
         'institucion': INSTITUCION_IMSS, 'proporcion': 0.15,
-        'edad': dict(media=63, desv=3, min=60, max=72),
-        'edad_primera_cotizacion': dict(media=22, desv=4, min=16, max=32),
+        'edad': dict(media=57, desv=5, min=47, max=64),
+        'edad_primera_cotizacion': dict(media=19, desv=0.8, min=18, max=20),
         'primera_cotizacion': {'antes_de': FECHA_LEY_97},
         'semanas': dict(media=1500, desv=350, min=700, max=2500),
     },
     '05': {
         'descripcion': 'IMSS Ley 73 - pensión ajustada al mínimo legal',
         'institucion': INSTITUCION_IMSS, 'proporcion': 0.10,
-        'edad': dict(media=61, desv=2, min=60, max=66),
-        'edad_primera_cotizacion': dict(media=24, desv=4, min=16, max=34),
+        'edad': dict(media=56, desv=5, min=47, max=64),
+        'edad_primera_cotizacion': dict(media=19, desv=0.8, min=18, max=20),
         'primera_cotizacion': {'antes_de': FECHA_LEY_97},
         'semanas': dict(media=1400, desv=250, min=800, max=2200),
         'salario': dict(media=10_800, desv=1_200, min=9_582, max=14_500),
@@ -135,16 +138,16 @@ PERFILES = {
     '06': {
         'descripcion': 'IMSS Ley 73 - negativa de pensión (menos de 500 semanas)',
         'institucion': INSTITUCION_IMSS, 'proporcion': 0.06,
-        'edad': dict(media=63, desv=3, min=60, max=72),
-        'edad_primera_cotizacion': dict(media=24, desv=5, min=16, max=38),
+        'edad': dict(media=55, desv=6, min=47, max=64),
+        'edad_primera_cotizacion': dict(media=19, desv=0.8, min=18, max=20),
         'primera_cotizacion': {'antes_de': FECHA_LEY_97},
         'semanas': dict(media=300, desv=100, min=50, max=499),
     },
     '07': {
         'descripcion': 'ISSSTE Cuentas Individuales - pensión con recursos propios',
         'institucion': INSTITUCION_ISSSTE, 'proporcion': 0.10,
-        'edad': dict(media=62, desv=3, min=60, max=72),
-        'edad_primera_cotizacion': dict(media=25, desv=4, min=18, max=35),
+        'edad': dict(media=49, desv=10, min=18, max=64),
+        'edad_primera_cotizacion': dict(media=25, desv=8, min=18, max=50),
         'primera_cotizacion': {'antes_de': FECHA_ISSSTE_2007},
         'anios': dict(media=28, desv=2.5, min=25, max=36),
         'salario': dict(media=28_000, desv=7_000, min=18_000, max=60_000),
@@ -152,8 +155,8 @@ PERFILES = {
     '08': {
         'descripcion': 'ISSSTE Cuentas Individuales - pensión garantizada',
         'institucion': INSTITUCION_ISSSTE, 'proporcion': 0.10,
-        'edad': dict(media=62, desv=3, min=60, max=72),
-        'edad_primera_cotizacion': dict(media=24, desv=4, min=18, max=35),
+        'edad': dict(media=55, desv=8, min=18, max=64),
+        'edad_primera_cotizacion': dict(media=24, desv=8, min=18, max=50),
         'primera_cotizacion': {'antes_de': FECHA_ISSSTE_2007},
         'anios': dict(media=27, desv=2, min=25, max=34),
         'salario': dict(media=11_000, desv=1_500, min=9_582, max=15_000),
@@ -161,14 +164,14 @@ PERFILES = {
     '09': {
         'descripcion': 'ISSSTE Cuentas Individuales - negativa de pensión (menos de 25 años)',
         'institucion': INSTITUCION_ISSSTE, 'proporcion': 0.06,
-        'edad': dict(media=67, desv=3, min=65, max=75),
-        'edad_primera_cotizacion': dict(media=30, desv=6, min=18, max=50),
+        'edad': dict(media=42, desv=13, min=18, max=64),
+        'edad_primera_cotizacion': dict(media=30, desv=10, min=18, max=50),
         'anios': dict(media=15, desv=5, min=3, max=24.9),
     },
     '10': {
         'descripcion': 'Independiente no incorporado',
         'institucion': None, 'proporcion': 0.10,
-        'edad': dict(media=52, desv=10, min=30, max=70),
+        'edad': dict(media=42, desv=13, min=18, max=64),
     },
 }
 

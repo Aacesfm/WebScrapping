@@ -1,6 +1,6 @@
 {
   "input": {
-    "path": "../../SyntethicDataGenerator/DataOutput/20261021_172249_771771/clientes_IMSS97.csv",
+    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_IMSS97.csv",
     "encoding": "utf-8-sig"
   },
   "output": {
@@ -8,8 +8,8 @@
     "encoding": "utf-8-sig"
   },
   "execution": {
-    "max_clients": 33000,
-    "max_seconds_per_client": 60,
+    "max_clients": 10000,
+    "max_seconds_per_client": 12,
     "chunk_size": 5,
     "resume": true
   },

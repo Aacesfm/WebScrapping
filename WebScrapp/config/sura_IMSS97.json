@@ -1,0 +1,29 @@
+{
+  "input": {
+    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_IMSS97.csv",
+    "encoding": "utf-8-sig"
+  },
+  "output": {
+    "path": "../DataOutput/sura_IMSS97_resultados_web.csv",
+    "encoding": "utf-8-sig"
+  },
+  "execution": {
+    "max_clients": 10000,
+    "max_seconds_per_client": 90,
+    "resume": true
+  },
+  "checkpoint": {"storage": "output_csv", "id_field": "id_cliente"},
+  "filters": {"regimen_estimado": "IMSS97", "ley_bandera": "LEY_97"},
+  "results": {"retirement_age": 65},
+  "browser": {
+    "url": "https://afore.suramexico.com/rutadelapension/nav?view=ley97/genera-tu-estudio-provisional-y-proyecta-tu-pension",
+    "headless": false,
+    "page_load_strategy": "eager",
+    "window_size": "1440,1100",
+    "pause_between_records_seconds": 2
+  },
+  "form": {
+    "email": "cliente.sintetico@example.com",
+    "con_densidad": false
+  }
+}

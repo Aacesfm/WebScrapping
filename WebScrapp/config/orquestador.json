@@ -1,0 +1,10 @@
+{
+  "scrappers": {
+    "profuturo_IMSS73": {"ejecutar": 1, "argumentos": []},
+    "profuturo_IMSS97": {"ejecutar": 1, "argumentos": []},
+    "profuturo_ISSSTECuentaIndividual": {"ejecutar": 1, "argumentos": []},
+    "banorte_IMSS97": {"ejecutar": 1, "argumentos": []},
+    "sura_IMSS73": {"ejecutar": 1, "argumentos": []},
+    "sura_IMSS97": {"ejecutar": 1, "argumentos": []}
+  }
+}

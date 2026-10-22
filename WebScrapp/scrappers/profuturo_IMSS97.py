@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import re
+import sys
 import time
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -19,6 +20,8 @@ RUTA_CONFIGURACION = (
 	/ 'config'
 	/ 'profuturo_IMSS97.json'
 )
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ETIQUETA = 'PROFUTURO IMSS97'
 TEXTO_ULTIMO_SALARIO = 'Último salario cotizado'
 
 # Columna de salida -> patrón sobre el texto visible de la pantalla de resultados.
@@ -34,6 +37,21 @@ PATRONES_WEB = {
 }
 COLUMNAS_WEB = list(PATRONES_WEB) + ['edad_retiro_calculo', 'observaciones']
 CAMPO_CHECKPOINT = 'id_checkpoint'
+
+
+def informar(mensaje):
+	print('[{}] {}'.format(ETIQUETA, mensaje), flush=True)
+
+
+def resumir(texto, limite=70):
+	texto = ' '.join(str(texto).split())
+	return texto if len(texto) <= limite else texto[:limite - 3] + '...'
+
+
+def validar_entorno():
+	if sys.version_info[:2] != (3, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
+		raise RuntimeError('Ejecute con el entorno virtual compartido: {}'.format(
+			ENTORNO_PROYECTO / 'bin' / 'python'))
 
 
 def cargar_configuracion():
@@ -394,11 +412,8 @@ def procesar_cliente(driver, cliente, configuracion):
 		)
 	except Exception as error:
 		registro['observaciones'] = configuracion['observaciones']['error'].format(
-			tipo=type(error).__name__, mensaje=str(error).strip() or 'Sin detalle'
+			tipo=type(error).__name__, mensaje=resumir(error) or 'Sin detalle'
 		)
-		print('Error con el cliente {}: {}'.format(
-			cliente[configuracion['checkpoint']['id_field']], error
-		))
 	finally:
 		try:
 			driver.execute_script('window.stop();')
@@ -408,6 +423,7 @@ def procesar_cliente(driver, cliente, configuracion):
 
 
 def main():
+	validar_entorno()
 	# ==============================================
 	# Iniciar: Leer configuración y muestra
 	# ==============================================
@@ -436,7 +452,7 @@ def main():
 		if cliente[configuracion['checkpoint']['id_field']] not in ids_guardados
 	]
 	if not pendientes:
-		print('Todos los clientes configurados ya están procesados.')
+		informar('Todos los clientes configurados ya estan procesados.')
 		return
 
 	columnas = columnas_salida(list(clientes[0].keys()))
@@ -460,33 +476,28 @@ def main():
 			# ==============================================
 			# Procesar: Un cliente completo
 			# ==============================================
-			print(
-				'Procesando cliente {} de {}: {}'.format(
-					indice + 1, len(clientes),
-					cliente[configuracion['checkpoint']['id_field']]
-				)
-			)
 			registro = procesar_cliente(driver, cliente, configuracion)
 			chunk.append(registro)
+			informar('{}/{} | {} | {}'.format(
+				indice + 1, len(clientes), registro[CAMPO_CHECKPOINT], registro['observaciones']
+			))
 			if len(chunk) >= tamano_chunk:
 				guardar_chunk(chunk, columnas, configuracion)
 				ids_guardados.update(
 					fila[CAMPO_CHECKPOINT] for fila in chunk
 				)
-				print('Checkpoint guardado: {}'.format(chunk[-1][CAMPO_CHECKPOINT]))
 				chunk = []
 			if configuracion['browser']['pause_between_records_seconds'] > 0:
 				time.sleep(configuracion['browser']['pause_between_records_seconds'])
 		if chunk:
 			guardar_chunk(chunk, columnas, configuracion)
-			print('Checkpoint guardado: {}'.format(chunk[-1][CAMPO_CHECKPOINT]))
 	finally:
 		# ==============================================
 		# Cerrar: Navegador
 		# ==============================================
 		driver.quit()
 
-	print('Procesamiento terminado. CSV: {}'.format(configuracion['output']['path']))
+	informar('CSV guardado: {}'.format(configuracion['output']['path']))
 
 
 if __name__ == '__main__':

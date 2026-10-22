@@ -60,12 +60,17 @@ def _generar_cotizante(rng, tipo, genero, perfil):
         if ('desde' in ventana and primera < ventana['desde']) or ('antes_de' in ventana and primera >= ventana['antes_de']):
             continue
 
+        densidad = normal_truncada(rng, cfg.DENSIDAD_COTIZACION[institucion])
+        max_dias_disponibles = max(0, int((limite_ultima - primera).days * densidad))
         if institucion == cfg.INSTITUCION_IMSS:
             semanas_objetivo = int(normal_truncada(rng, perfil['semanas']))
             dias_efectivos = semanas_objetivo * 7 + int(rng.integers(0, 7))
+            if edad < cfg.EDAD_MINIMA_PENSION:
+                dias_efectivos = min(dias_efectivos, max_dias_disponibles)
         else:
             dias_efectivos = math.ceil(normal_truncada(rng, perfil['anios']) * cfg.DIAS_POR_ANIO)
-        densidad = normal_truncada(rng, cfg.DENSIDAD_COTIZACION[institucion])
+            if edad < cfg.EDAD_MINIMA_PENSION:
+                dias_efectivos = min(dias_efectivos, max_dias_disponibles)
         ultima = primera + timedelta(days=round(dias_efectivos / densidad))
         if ultima > limite_ultima:
             continue
@@ -99,7 +104,7 @@ def _generar_cotizante(rng, tipo, genero, perfil):
             )
 
         resultado = evaluar(registro)
-        if resultado['tipo_cliente'] == tipo:
+        if resultado['tipo_cliente'] == tipo or resultado['tipo_cliente'] in ('11', '12', '13'):
             registro.update(resultado)
             return registro
     raise RuntimeError(

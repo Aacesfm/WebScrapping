@@ -85,7 +85,11 @@ def _validar_cotizante(r, errores):
 
     tasa_max = max(cfg.AHORRO_VOLUNTARIO[k]['max'] for k in ('tasa_pequena', 'tasa_alta'))
     anios_capitalizacion = (cfg.FECHA_CORTE - primera).days / cfg.DIAS_POR_ANIO
-    tope_av = r['salario_mensual'] * 12 * anios * tasa_max * (1 + cfg.RENDIMIENTO_RCV['max']) ** anios_capitalizacion
+    anios_disponibles = max(
+        anios,
+        dias_periodo / cfg.DIAS_POR_ANIO * cfg.DENSIDAD_COTIZACION[institucion]['max'],
+    )
+    tope_av = r['salario_mensual'] * 12 * anios_disponibles * tasa_max * (1 + cfg.RENDIMIENTO_RCV['max']) ** anios_capitalizacion
     if r['saldo_av'] > tope_av + 0.01:
         errores.append('saldo AV excede la capacidad de ahorro')
 

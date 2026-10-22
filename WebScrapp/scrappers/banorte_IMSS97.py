@@ -16,11 +16,35 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 
 RUTA_CONFIGURACION = Path(__file__).resolve().parents[1] / 'config' / 'banorte_IMSS97.json'
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ETIQUETA = 'BANORTE IMSS97'
+ESTADO_POR_CASO = {
+	'Negativa de pension': 'NEGATIVA',
+	'Pension garantizada': 'GARANTIZADA',
+	'Pension garantizada con CS': 'GARANTIZADA | con CS',
+	'Pension con complemento solidario': 'OK | complemento solidario',
+	'Pension con recursos propios': 'OK | recursos propios',
+}
 COLUMNAS_WEB = [
 	'Pension_web', 'pension_con_av_web', 'rcv_proy_web', 'rcv_av_proy_web',
 	'sal_cot_web', 'tasa_remplazo_web', 'tasa_rendimiento_web',
 	'densidad_cot_web', 'edad_retiro_calculo', 'observaciones',
 ]
+
+
+def informar(mensaje):
+	print('[{}] {}'.format(ETIQUETA, mensaje), flush=True)
+
+
+def resumir(texto, limite=70):
+	texto = ' '.join(str(texto).split())
+	return texto if len(texto) <= limite else texto[:limite - 3] + '...'
+
+
+def validar_entorno():
+	if sys.version_info[:2] != (3, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
+		raise RuntimeError('Ejecute con el entorno virtual compartido: {}'.format(
+			ENTORNO_PROYECTO / 'bin' / 'python'))
 
 
 def cargar_configuracion():
@@ -283,8 +307,8 @@ def procesar_cliente(driver, cliente, configuracion):
 	etapa = 'datos'
 	try:
 		if numero(cliente.get('age'), 'age') > registro['edad_retiro_calculo']:
-			registro['observaciones'] = 'edad es mayor a la edad de retiro {}'.format(
-				registro['edad_retiro_calculo']
+			registro['observaciones'] = 'OMITIDO | edad {} > retiro {}'.format(
+				cliente.get('age'), registro['edad_retiro_calculo']
 			)
 			return registro
 		datos = preparar_datos(cliente, configuracion)
@@ -293,13 +317,15 @@ def procesar_cliente(driver, cliente, configuracion):
 		etapa = 'resultados'
 		resultados, caso = extraer_resultados(driver, configuracion, limite)
 		registro.update(resultados)
-		registro['observaciones'] = caso
-	except (ValueError, RechazoBanorte) as error:
-		registro['observaciones'] = str(error)[:110]
+		registro['observaciones'] = ESTADO_POR_CASO.get(caso, 'OK | ' + resumir(caso))
+	except ValueError as error:
+		registro['observaciones'] = 'DATO INVALIDO | ' + resumir(error)
+	except RechazoBanorte as error:
+		registro['observaciones'] = 'RECHAZADO | ' + resumir(error)
 	except TimeoutException:
-		registro['observaciones'] = 'Tiempo agotado: {}'.format(etapa)
+		registro['observaciones'] = 'TIMEOUT | {}'.format(etapa)
 	except WebDriverException as error:
-		registro['observaciones'] = 'Navegador: {}'.format(type(error).__name__)
+		registro['observaciones'] = 'ERROR | {}'.format(type(error).__name__)
 	return registro
 
 
@@ -333,8 +359,7 @@ def guardar_chunk(chunk, columnas, configuracion, ids_guardados):
 
 
 def main():
-	if sys.version_info[:2] != (3, 8) or sys.prefix == sys.base_prefix:
-		raise RuntimeError('Ejecute con el entorno virtual Python 3.8 del proyecto.')
+	validar_entorno()
 	configuracion = cargar_configuracion()
 	clientes, columnas_entrada = leer_clientes(configuracion)
 	if not clientes:
@@ -361,8 +386,9 @@ def main():
 	pendientes = [cliente for cliente in clientes
 				  if cliente[configuracion['checkpoint']['id_field']] not in ids_guardados]
 	if not pendientes:
-		print('La muestra ya esta procesada.')
+		informar('La muestra ya esta procesada.')
 		return
+	previos = len(ids_guardados)
 	opciones = webdriver.ChromeOptions()
 	opciones.page_load_strategy = 'eager'
 	if configuracion['browser']['headless']:
@@ -380,9 +406,9 @@ def main():
 		for indice, cliente in enumerate(pendientes, start=1):
 			registro = procesar_cliente(driver, cliente, configuracion)
 			chunk.append(registro)
-			print('[{}/{}] Cliente {}: {}'.format(
-				indice, len(pendientes), registro['id_checkpoint'],
-				registro['observaciones']), flush=True)
+			informar('{}/{} | {} | {}'.format(
+				previos + indice, len(clientes), registro['id_checkpoint'],
+				registro['observaciones']))
 			if len(chunk) >= configuracion['execution']['chunk_size']:
 				guardar_chunk(chunk, columnas, configuracion, ids_guardados)
 			pausa = configuracion['browser']['pause_between_records_seconds']
@@ -394,7 +420,7 @@ def main():
 			guardar_chunk(chunk, columnas, configuracion, ids_guardados)
 		finally:
 			driver.quit()
-	print('CSV: {}'.format(ruta))
+	informar('CSV guardado: {}'.format(ruta))
 
 
 if __name__ == '__main__':

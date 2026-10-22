@@ -1,6 +1,6 @@
 {
   "input": {
-    "path": "../../SyntethicDataGenerator/DataOutput/20261021_172249_771771/clientes_ISSSTE_Cuentas_Individuales.csv",
+    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_ISSSTE_Cuentas_Individuales.csv",
     "encoding": "utf-8-sig"
   },
   "output": {
@@ -8,8 +8,8 @@
     "encoding": "utf-8-sig"
   },
   "execution": {
-    "max_clients": 26000,
-    "max_seconds_per_client": 45
+    "max_clients": 10000,
+    "max_seconds_per_client": 12
   },
   "filters": {"regimen_estimado": "ISSSTE", "ley_bandera": "LEY_ISSSTE"},
   "browser": {

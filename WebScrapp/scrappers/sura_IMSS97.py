@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import os
 import re
 import sys
@@ -16,21 +17,45 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
 
-RAIZ = Path(__file__).resolve().parents[1]
-RUTA_ENTRADAS = RAIZ.parent / 'SyntethicDataGenerator' / 'DataOutput'
-URL = ('https://afore.suramexico.com/rutadelapension/nav?view=ley97/'
-	   'genera-tu-estudio-provisional-y-proyecta-tu-pension')
-RUTA_SALIDA = RAIZ / 'DataOutput' / 'sura_IMSS97_resultados_web.csv'
-CORREO_PRUEBA = 'cliente.sintetico@example.com'
-EDAD_RETIRO = 65
-TIEMPO_CLIENTE = 90
-PAUSA_CLIENTES = 2
+RUTA_CONFIGURACION = Path(__file__).resolve().parents[1] / 'config' / 'sura_IMSS97.json'
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ETIQUETA = 'SURA IMSS97'
 VALOR_FALTANTE = 'NaN'
 COLUMNAS_WEB = [
 	'Pension_web', 'pension_con_av_web', 'rcv_proy_web', 'rcv_av_proy_web',
 	'sal_cot_web', 'tasa_remplazo_web', 'tasa_rendimiento_web',
 	'densidad_cot_web', 'edad_retiro_calculo', 'observaciones',
 ]
+
+
+def validar_entorno():
+	if sys.version_info[:2] != (3, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
+		raise RuntimeError('Ejecute con el entorno virtual compartido: {}'.format(
+			ENTORNO_PROYECTO / 'bin' / 'python'))
+
+
+def informar(mensaje):
+	print('[{}] {}'.format(ETIQUETA, mensaje), flush=True)
+
+
+def resumir(texto, limite=70):
+	texto = ' '.join(str(texto).split())
+	return texto if len(texto) <= limite else texto[:limite - 3] + '...'
+
+
+def unir(estado, notas):
+	return estado + (' | ' + '; '.join(notas) if notas else '')
+
+
+def cargar_configuracion():
+	with RUTA_CONFIGURACION.open(encoding='utf-8') as archivo:
+		configuracion = json.load(archivo)
+	for seccion in ('input', 'output'):
+		ruta = Path(configuracion[seccion]['path'])
+		if not ruta.is_absolute():
+			ruta = RUTA_CONFIGURACION.parent / ruta
+		configuracion[seccion]['path'] = str(ruta.resolve())
+	return configuracion
 
 
 def columnas_salida(columnas_entrada):
@@ -149,10 +174,10 @@ def avanzar(driver, paso, limite):
 	esperar(driver, limite).until(cambio)
 
 
-def completar_formulario(driver, cliente, datos, limite, edad_retiro, con_densidad):
+def completar_formulario(driver, cliente, datos, limite, configuracion):
 	# Abrimos una simulacion limpia para no reutilizar resultados del cliente anterior.
 	driver.set_page_load_timeout(max(1, limite - time.monotonic()))
-	driver.get(URL)
+	driver.get(configuracion['browser']['url'])
 	esperar(driver, limite).until(
 		EC.presence_of_element_located((By.ID, 'nombreCalculadora'))
 	)
@@ -174,7 +199,7 @@ def completar_formulario(driver, cliente, datos, limite, edad_retiro, con_densid
 		('#nombreCalculadora', cliente['nombre']),
 		('#apaternoCalculadora', cliente['ap_paterno']),
 		('#amaternoCalculadora', cliente.get('ap_materno', '')),
-		('#emailCalculadora', CORREO_PRUEBA),
+		('#emailCalculadora', configuracion['form']['email']),
 		('#diaFechaCalculadora', datos['nacimiento'].day),
 		('#anioFechaCalculadora', datos['nacimiento'].year),
 	):
@@ -188,7 +213,8 @@ def completar_formulario(driver, cliente, datos, limite, edad_retiro, con_densid
 		cliente['genero']), limite)
 	pulsar(driver, '#yes', limite)
 	escribir(driver, '#semanasCotizadasCalculadora', datos['sem_cot'], limite)
-	Select(driver.find_element(By.ID, 'edadDeRetiro')).select_by_value(str(edad_retiro))
+	Select(driver.find_element(By.ID, 'edadDeRetiro')).select_by_value(
+		str(configuracion['results']['retirement_age']))
 	avanzar(driver, 1, limite)
 
 	# Ingresamos los saldos por separado; vivienda no se suma al RCV exportado.
@@ -202,7 +228,7 @@ def completar_formulario(driver, cliente, datos, limite, edad_retiro, con_densid
 	escribir(driver, '#ahorroVoluntarioCalculadora', datos['saldo_av'], limite)
 	escribir(driver, '#ahorroMensualCalculadora', datos['av_mensual'], limite)
 	pulsar(driver, 'input[name="vidaLaboral"][value="{}"]'.format(
-		'1' if con_densidad else '0'), limite)
+		'1' if configuracion['form']['con_densidad'] else '0'), limite)
 	avanzar(driver, 2, limite)
 	# El boton ejecuta el reCAPTCHA normal del sitio; no se inyectan tokens.
 	pulsar(driver, '#paso3 input[value="Calcular"]', limite)
@@ -248,17 +274,18 @@ def leer_resultado(driver, modalidad, con_av=False):
 	}
 
 
-def procesar_cliente(driver, cliente, argumentos):
+def procesar_cliente(driver, cliente, configuracion):
 	registro = dict(cliente)
 	registro.update({columna: VALOR_FALTANTE for columna in COLUMNAS_WEB})
 	registro['nombre_completo'] = ' '.join(
 		cliente.get(campo, '').strip() for campo in ('nombre', 'ap_paterno', 'ap_materno')
 		if cliente.get(campo, '').strip()
 	)
-	registro['edad_retiro_calculo'] = argumentos.edad_retiro
-	registro['id_checkpoint'] = cliente.get('id_cliente', '')
-	avisos = []
-	limite = time.monotonic() + argumentos.timeout
+	registro['edad_retiro_calculo'] = configuracion['results']['retirement_age']
+	registro['id_checkpoint'] = cliente.get(configuracion['checkpoint']['id_field'], '')
+	estado = 'ERROR'
+	notas = []
+	limite = time.monotonic() + configuracion['execution']['max_seconds_per_client']
 	try:
 		datos = preparar_datos(cliente)
 		edad = date.today().year - datos['nacimiento'].year - (
@@ -266,55 +293,51 @@ def procesar_cliente(driver, cliente, argumentos):
 			< (datos['nacimiento'].month, datos['nacimiento'].day)
 		)
 		if str(edad) != cliente.get('age'):
-			avisos.append('Edad CSV distinta de la fecha de nacimiento: {}.'.format(edad))
-		if edad > argumentos.edad_retiro:
-			avisos.append('Edad actual mayor que la edad de retiro solicitada.')
-		completar_formulario(driver, cliente, datos, limite,
-							 argumentos.edad_retiro, argumentos.con_densidad)
+			notas.append('edad CSV distinta de la calculada ({})'.format(edad))
+		if edad > configuracion['results']['retirement_age']:
+			notas.append('edad mayor al retiro')
+		completar_formulario(driver, cliente, datos, limite, configuracion)
 		modalidad = esperar_resultado(driver, limite)
 		if modalidad == 'NEGATIVA':
-			avisos.append('Se clasifico como negativa de pension en SURA. '
-						  'El saldo de devolucion no se interpreta como pension.')
+			estado = 'NEGATIVA'
 		else:
 			registro.update(leer_resultado(driver, modalidad))
-			avisos.append('Se clasifico como pension minima garantizada.' if modalidad == 'PG'
-						  else 'Termino el ciclo normal: retiro programado, no renta vitalicia.')
+			estado = 'GARANTIZADA' if modalidad == 'PG' else 'OK'
 			# Cambiamos mediante la pestana real para obtener la proyeccion con AV.
 			pulsar(driver, '#liRCVAV' + ('' if modalidad == 'PG' else 'RP'), limite)
 			modalidad_av = esperar_resultado(driver, limite, con_av=True)
 			if modalidad_av == 'NEGATIVA':
-				avisos.append('Negativa de pension al consultar RCV + AV.')
+				notas.append('AV: NEGATIVA')
 			else:
 				registro.update(leer_resultado(driver, modalidad_av, con_av=True))
-				avisos.append('RCV + AV: {}.'.format(
-					'pension garantizada' if modalidad_av == 'PG' else 'retiro programado'))
+				if (modalidad_av == 'PG') != (modalidad == 'PG'):
+					notas.append('AV: ' + ('GARANTIZADA' if modalidad_av == 'PG' else 'OK'))
 				faltantes = [campo for campo in ('Pension_web', 'pension_con_av_web',
 							 'rcv_proy_web', 'rcv_av_proy_web', 'tasa_remplazo_web')
 							 if registro[campo] == VALOR_FALTANTE]
 				if faltantes:
-					avisos.append('Resultado incompleto: {}.'.format(', '.join(faltantes)))
+					estado = 'INCOMPLETO'
+					notas.append('falta ' + ', '.join(faltantes))
 	except RechazoSura as error:
-		avisos.append(str(error))
+		estado = 'RECHAZADO'
+		notas.append(resumir(error))
 	except (ValueError, KeyError) as error:
-		avisos.append('Datos no validos: {}.'.format(error))
+		estado = 'DATO INVALIDO'
+		notas.append(resumir(error))
 	except TimeoutException:
-		avisos.append('No continuo despues de {} segundos de espera.'.format(argumentos.timeout))
+		estado = 'TIMEOUT'
+		notas.append('{}s'.format(configuracion['execution']['max_seconds_per_client']))
 	except WebDriverException as error:
-		avisos.append('Error del navegador ({}): {}.'.format(
-			type(error).__name__, str(error).splitlines()[0][:400]))
-	avisos.append('Sin equivalente verificado para ultimo salario cotizado, '
-				  'rendimiento y densidad numerica: NaN. '
-				  'Importes visibles sin centavos; RCV + AV excluye vivienda. '
-				  'Continuidad laboral: {}. Correo de prueba reservado; '
-				  'CURP y NSS opcionales no enviados.'.format(
-					  'con periodos sin aportar' if argumentos.con_densidad else 'ininterrumpida'))
-	registro['observaciones'] = ' | '.join(avisos)
+		estado = 'ERROR'
+		notas.append(type(error).__name__)
+	registro['observaciones'] = unir(estado, notas)
 	return registro
 
 
-def leer_clientes(ruta, maximo):
+def leer_clientes(configuracion):
 	# Conservamos los casos incompletos para documentar su rechazo en el CSV.
-	with ruta.open(encoding='utf-8-sig', newline='') as archivo:
+	with open(configuracion['input']['path'],
+			  encoding=configuracion['input']['encoding'], newline='') as archivo:
 		lector = csv.DictReader(archivo)
 		columnas = lector.fieldnames
 		if not columnas or 'id_cliente' not in columnas:
@@ -322,25 +345,25 @@ def leer_clientes(ruta, maximo):
 		clientes = []
 		ids = set()
 		for cliente in lector:
-			if (cliente.get('regimen_estimado') != 'IMSS97'
-					or cliente.get('ley_bandera') != 'LEY_97'):
+			if not all(cliente.get(campo) == valor
+					   for campo, valor in configuracion['filters'].items()):
 				continue
 			identidad = cliente.get('id_cliente', '').strip()
 			if not identidad or identidad in ids:
 				raise ValueError('id_cliente vacio o duplicado: {}.'.format(identidad))
 			ids.add(identidad)
 			clientes.append(cliente)
-			if len(clientes) >= maximo:
+			if len(clientes) >= configuracion['execution']['max_clients']:
 				break
 	return clientes, columnas_salida(columnas)
 
 
-def ids_guardados(ruta, columnas, reanudar):
+def ids_guardados(ruta, columnas, reanudar, encoding='utf-8-sig'):
 	if not ruta.exists() or ruta.stat().st_size == 0:
 		return set()
 	if not reanudar:
 		raise FileExistsError('La salida existe. Use --reanudar o una salida nueva.')
-	with ruta.open(encoding='utf-8-sig', newline='') as archivo:
+	with ruta.open(encoding=encoding, newline='') as archivo:
 		lector = csv.DictReader(archivo)
 		if lector.fieldnames != columnas:
 			raise ValueError('La salida existente no tiene el mismo layout que la entrada.')
@@ -355,81 +378,98 @@ def ids_guardados(ruta, columnas, reanudar):
 		return guardados
 
 
-def argumentos_cli():
+def argumentos_cli(configuracion=None, argv=None):
+	if configuracion is None:
+		configuracion = cargar_configuracion()
 	parser = argparse.ArgumentParser(
 		description='Calculadora SURA IMSS97 con el layout CSV de Profuturo. '
 					'La pagina guarda los datos de cada simulacion en SURA.'
 	)
-	parser.add_argument('--input', type=Path, help='CSV sintetico IMSS97 de entrada.')
-	parser.add_argument('--output', type=Path, default=RUTA_SALIDA)
-	parser.add_argument('--max-clientes', type=int, default=10)
-	parser.add_argument('--edad-retiro', type=int, choices=range(60, 66), default=EDAD_RETIRO)
-	parser.add_argument('--timeout', type=int, default=TIEMPO_CLIENTE)
-	parser.add_argument('--pausa', type=float, default=PAUSA_CLIENTES)
+	parser.add_argument('--input', type=Path, default=Path(configuracion['input']['path']))
+	parser.add_argument('--output', type=Path, default=Path(configuracion['output']['path']))
+	parser.add_argument('--max-clientes', type=int, default=configuracion['execution']['max_clients'])
+	parser.add_argument('--edad-retiro', type=int, choices=range(60, 66),
+						default=configuracion['results']['retirement_age'])
+	parser.add_argument('--timeout', type=int,
+						default=configuracion['execution']['max_seconds_per_client'])
+	parser.add_argument('--pausa', type=float,
+						default=configuracion['browser']['pause_between_records_seconds'])
 	parser.add_argument('--con-densidad', action='store_true',
+						default=configuracion['form']['con_densidad'],
 						help='Seleccionar periodos sin trabajo; no fija un porcentaje.')
-	parser.add_argument('--headless', action='store_true')
-	parser.add_argument('--reanudar', action='store_true')
-	argumentos = parser.parse_args()
+	parser.add_argument('--headless', action='store_true', default=configuracion['browser']['headless'])
+	parser.add_argument('--reanudar', action='store_true', default=configuracion['execution']['resume'])
+	argumentos = parser.parse_args(argv)
 	if argumentos.max_clientes < 1 or argumentos.timeout < 1 or argumentos.pausa < 0:
 		parser.error('Maximo y timeout deben ser positivos; pausa no puede ser negativa.')
-	if argumentos.input is None:
-		candidatos = sorted(RUTA_ENTRADAS.glob('*/clientes_IMSS97.csv'))
-		if len(candidatos) != 1:
-			parser.error('Indique --input: no se encontro un unico CSV IMSS97.')
-		argumentos.input = candidatos[0]
+	if argumentos.edad_retiro not in range(60, 66):
+		parser.error('La edad de retiro debe estar entre 60 y 65.')
 	if argumentos.input.resolve() == argumentos.output.resolve():
 		parser.error('La salida no puede ser el archivo de entrada.')
-	return argumentos
+	configuracion['input']['path'] = str(argumentos.input.resolve())
+	configuracion['output']['path'] = str(argumentos.output.resolve())
+	configuracion['execution'].update(
+		max_clients=argumentos.max_clientes, max_seconds_per_client=argumentos.timeout,
+		resume=argumentos.reanudar)
+	configuracion['results']['retirement_age'] = argumentos.edad_retiro
+	configuracion['browser'].update(
+		headless=argumentos.headless, pause_between_records_seconds=argumentos.pausa)
+	configuracion['form']['con_densidad'] = argumentos.con_densidad
+	return configuracion
 
 
 def main():
-	argumentos = argumentos_cli()
-	if sys.version_info[:2] != (3, 8) or sys.prefix == sys.base_prefix:
-		raise RuntimeError('Ejecute el script dentro de un entorno virtual Python 3.8.')
-	clientes, columnas = leer_clientes(argumentos.input, argumentos.max_clientes)
-	guardados = ids_guardados(argumentos.output, columnas, argumentos.reanudar)
+	validar_entorno()
+	configuracion = argumentos_cli(cargar_configuracion())
+	clientes, columnas = leer_clientes(configuracion)
+	if not clientes:
+		raise ValueError('No se encontraron clientes sinteticos IMSS Ley 97.')
+	ruta_salida = Path(configuracion['output']['path'])
+	guardados = ids_guardados(ruta_salida, columnas, configuracion['execution']['resume'],
+							 configuracion['output']['encoding'])
 	if not guardados.issubset({cliente['id_cliente'] for cliente in clientes}):
 		raise ValueError('La salida contiene IDs fuera de la muestra de entrada seleccionada.')
 	pendientes = [cliente for cliente in clientes if cliente['id_cliente'] not in guardados]
 	if not pendientes:
-		print('No hay clientes pendientes.')
+		informar('No hay clientes pendientes.')
 		return
-	print('Entrada: {}\nSalida: {}\nPendientes: {}'.format(
-		argumentos.input, argumentos.output, len(pendientes)))
-	print('SURA guarda los datos al calcular. Se usara {} y no se enviaran correos.'.format(
-		CORREO_PRUEBA))
+	informar('{} pendientes de {} | salida: {}'.format(
+		len(pendientes), len(clientes), ruta_salida))
+	informar('Aviso: SURA guarda los datos enviados; correo de prueba {}'.format(
+		configuracion['form']['email']))
 	opciones = webdriver.ChromeOptions()
-	if argumentos.headless:
+	if configuracion['browser']['headless']:
 		opciones.add_argument('--headless=new')
-	opciones.add_argument('--window-size=1440,1100')
-	opciones.page_load_strategy = 'eager'
+	opciones.add_argument('--window-size=' + configuracion['browser']['window_size'])
+	opciones.page_load_strategy = configuracion['browser']['page_load_strategy']
 	driver = webdriver.Chrome(options=opciones)
 	try:
-		argumentos.output.parent.mkdir(parents=True, exist_ok=True)
-		cabecera = not argumentos.output.exists() or argumentos.output.stat().st_size == 0
+		ruta_salida.parent.mkdir(parents=True, exist_ok=True)
+		cabecera = not ruta_salida.exists() or ruta_salida.stat().st_size == 0
 		# El propio CSV es el checkpoint; cada cliente se confirma en disco por separado.
-		with argumentos.output.open('a', encoding='utf-8-sig', newline='') as archivo:
+		with ruta_salida.open('a', encoding=configuracion['output']['encoding'], newline='') as archivo:
 			escritor = csv.DictWriter(archivo, fieldnames=columnas, extrasaction='ignore')
 			if cabecera:
 				escritor.writeheader()
 			for indice, cliente in enumerate(pendientes, 1):
-				registro = procesar_cliente(driver, cliente, argumentos)
+				registro = procesar_cliente(driver, cliente, configuracion)
 				escritor.writerow(registro)
 				archivo.flush()
 				os.fsync(archivo.fileno())
-				print('{}/{} - Cliente {}: {}'.format(
-					indice, len(pendientes), cliente['id_cliente'], registro['observaciones']))
+				informar('{}/{} | {} | {}'.format(
+					len(guardados) + indice, len(clientes), cliente['id_cliente'],
+					registro['observaciones']))
 				if 'CAPTCHA' in registro['observaciones'].upper():
-					print('Lote detenido por CAPTCHA. No se intentara evadir la proteccion.')
+					informar('Lote detenido por CAPTCHA.')
 					break
 				# Respetamos una pausa configurable entre clientes para moderar las solicitudes.
-				if argumentos.pausa and indice < len(pendientes):
-					time.sleep(argumentos.pausa)
+				pausa = configuracion['browser']['pause_between_records_seconds']
+				if pausa and indice < len(pendientes):
+					time.sleep(pausa)
 	finally:
 		# Cerramos Chrome incluso si se interrumpe el lote o falla la escritura.
 		driver.quit()
-	print('CSV guardado: {}'.format(argumentos.output))
+	informar('CSV guardado: {}'.format(ruta_salida))
 
 
 if __name__ == '__main__':

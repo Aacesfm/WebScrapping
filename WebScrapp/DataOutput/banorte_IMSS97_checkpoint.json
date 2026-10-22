@@ -1,6 +1,6 @@
 {
-  "checkpoint_id": "115",
+  "checkpoint_id": "2257",
   "id_field": "id_cliente",
-  "processed_count": 35,
-  "input_path": "/Users/alejandro_aac/Documents/WebScrapping/SyntethicDataGenerator/DataOutput/20261021_172249_771771/clientes_IMSS97.csv"
+  "processed_count": 735,
+  "input_path": "/Users/alejandro_aac/Documents/WebScrapping/SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_IMSS97.csv"
 }

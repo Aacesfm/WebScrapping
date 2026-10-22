@@ -2,6 +2,7 @@ import csv
 import json
 import os
 import re
+import sys
 import time
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -19,6 +20,8 @@ RUTA_CONFIGURACION = (
     / 'config'
     / 'profuturo_IMSS73.json'
 )
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ETIQUETA = 'PROFUTURO IMSS73'
 TEXTO_ULTIMO_SALARIO = 'Último salario cotizado'
 CAMPO_CHECKPOINT = 'id_checkpoint'
 
@@ -33,6 +36,21 @@ PATRONES_WEB = {
     'densidad_cot_web': r'Densidad de cotización\s*(?:\d\s+)?([\d.]+)\s*%',
 }
 COLUMNAS_WEB = list(PATRONES_WEB) + ['edad_retiro_calculo', 'observaciones']
+
+
+def informar(mensaje):
+    print('[{}] {}'.format(ETIQUETA, mensaje), flush=True)
+
+
+def resumir(texto, limite=70):
+    texto = ' '.join(str(texto).split())
+    return texto if len(texto) <= limite else texto[:limite - 3] + '...'
+
+
+def validar_entorno():
+    if sys.version_info[:2] != (3, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
+        raise RuntimeError('Ejecute con el entorno virtual compartido: {}'.format(
+            ENTORNO_PROYECTO / 'bin' / 'python'))
 
 
 def cargar_configuracion():
@@ -237,7 +255,6 @@ def procesar_resultados(driver, configuracion, limite):
     observacion = observaciones['normal']
     if hay_pop_visible(driver):
         texto_pop = driver.find_element(By.CSS_SELECTOR, '.swal2-popup').text
-        print('Popup detectado: {}'.format(texto_pop))
         observacion = clasificar_pop(texto_pop, observaciones)
         esperar(driver, limite).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, '.swal2-confirm'))
@@ -328,11 +345,8 @@ def procesar_cliente(driver, cliente, configuracion):
         )
     except Exception as error:
         registro['observaciones'] = configuracion['observaciones']['error'].format(
-            tipo=type(error).__name__, mensaje=str(error).strip() or 'Sin detalle'
+            tipo=type(error).__name__, mensaje=resumir(error) or 'Sin detalle'
         )
-        print('Error con el cliente {}: {}'.format(
-            cliente[configuracion['checkpoint']['id_field']], error
-        ))
     finally:
         try:
             driver.execute_script('window.stop();')
@@ -342,6 +356,7 @@ def procesar_cliente(driver, cliente, configuracion):
 
 
 def main():
+    validar_entorno()
     configuracion = cargar_configuracion()
     clientes = leer_clientes(configuracion)
     if not clientes:
@@ -367,7 +382,7 @@ def main():
         if cliente[configuracion['checkpoint']['id_field']] not in ids_guardados
     ]
     if not pendientes:
-        print('Todos los clientes IMSS Ley 73 configurados ya están procesados.')
+        informar('Todos los clientes configurados ya estan procesados.')
         return
 
     columnas = columnas_salida(list(clientes[0].keys()))
@@ -385,23 +400,22 @@ def main():
     tamano_chunk = configuracion['execution']['chunk_size']
     try:
         for indice, cliente in enumerate(pendientes, start=len(ids_guardados) + 1):
-            print('Procesando cliente {} de {}: {}'.format(
-                indice, len(clientes), cliente[configuracion['checkpoint']['id_field']]
+            registro = procesar_cliente(driver, cliente, configuracion)
+            chunk.append(registro)
+            informar('{}/{} | {} | {}'.format(
+                indice, len(clientes), registro[CAMPO_CHECKPOINT], registro['observaciones']
             ))
-            chunk.append(procesar_cliente(driver, cliente, configuracion))
             if len(chunk) >= tamano_chunk:
                 guardar_chunk(chunk, columnas, configuracion)
-                print('Checkpoint guardado: {}'.format(chunk[-1][CAMPO_CHECKPOINT]))
                 chunk = []
             if configuracion['browser']['pause_between_records_seconds'] > 0:
                 time.sleep(configuracion['browser']['pause_between_records_seconds'])
         if chunk:
             guardar_chunk(chunk, columnas, configuracion)
-            print('Checkpoint guardado: {}'.format(chunk[-1][CAMPO_CHECKPOINT]))
     finally:
         driver.quit()
 
-    print('Procesamiento Ley 73 terminado. CSV: {}'.format(ruta_salida))
+    informar('CSV guardado: {}'.format(ruta_salida))
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 {
   "input": {
-    "path": "../../SyntethicDataGenerator/DataOutput/20261021_153927_012422/clientes_IMSS73.csv",
+    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_IMSS73.csv",
     "encoding": "utf-8-sig"
   },
   "output": {
@@ -8,7 +8,7 @@
     "encoding": "utf-8-sig"
   },
   "execution": {
-    "max_clients": 31000,
+    "max_clients": 10000,
     "max_seconds_per_client": 20,
     "chunk_size": 5,
     "resume": true
@@ -22,12 +22,12 @@
     "retirement_age": 65
   },
   "observaciones": {
-    "normal": "Termino el ciclo normal",
-    "pop_pension_garantizada": "Se clasifico como pensión mínima garantizada",
-    "pop_negativa_pension": "Se clasifico como negativa de pensión",
-    "pop_desconocido": "Aparecio un pop no identificado",
-    "timeout": "No continuo despues de {segundos} segundos de espera",
-    "error": "Error inesperado ({tipo}): {mensaje}"
+    "normal": "OK",
+    "pop_pension_garantizada": "GARANTIZADA",
+    "pop_negativa_pension": "NEGATIVA",
+    "pop_desconocido": "ALERTA | pop no identificado",
+    "timeout": "TIMEOUT | {segundos}s",
+    "error": "ERROR | {tipo}: {mensaje}"
   },
   "filters": {
     "regimen_estimado": "IMSS73",

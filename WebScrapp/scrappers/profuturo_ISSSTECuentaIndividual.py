@@ -2,6 +2,7 @@ import argparse
 import csv
 import json
 import re
+import sys
 import time
 from datetime import date, datetime
 from decimal import Decimal, ROUND_HALF_UP
@@ -19,6 +20,8 @@ RUTA_CONFIGURACION = (
 	Path(__file__).resolve().parents[1]
 	/ 'config' / 'profuturo_ISSSTECuentaIndividual.json'
 )
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ETIQUETA_CONSOLA = 'PROFUTURO ISSSTE'
 ETIQUETAS = {
 	'anios_cotizados': 'Años que has cotizado',
 	'ahorro_voluntario_mensual': 'Ahorro voluntario',
@@ -87,7 +90,7 @@ def preparar_datos(cliente, configuracion, exploratorio=False):
 	if edad < 0:
 		raise ValueError('La fecha de nacimiento es futura.')
 	if str(edad) != cliente.get('age'):
-		avisos.append('Edad CSV distinta de la calculada: {}.'.format(edad))
+		avisos.append('edad CSV distinta de la calculada ({})'.format(edad))
 	manual = configuracion['form']['manual_por_cliente'].get(cliente['id_cliente'], {})
 	porcentaje = Decimal(datos.pop('porcentaje_ahorro_solidario'))
 	if not porcentaje.is_finite() or not Decimal('1') <= porcentaje <= Decimal('2'):
@@ -106,15 +109,11 @@ def preparar_datos(cliente, configuracion, exploratorio=False):
 			or retiro_decimal < 60):
 		raise ValueError('Edad de retiro debe ser entera y al menos 60.')
 	if edad > retiro_decimal:
-		avisos.append('Edad actual {} mayor al retiro configurado {}; se envia sin cambiarla.'.format(
-			edad, retiro
-		))
+		avisos.append('edad {} > retiro {}'.format(edad, retiro))
 	datos['ahorro_solidario'] = str(solidario)
 	datos['edad_retiro'] = str(int(retiro_decimal))
 	if Decimal(str(solidario)) != porcentaje:
-		avisos.append('Porcentaje CSV {} sustituido por {} para esta simulacion.'.format(
-			porcentaje, solidario
-		))
+		avisos.append('solidario {:.2f} -> {}'.format(porcentaje, solidario))
 	if datos['genero'] not in configuracion['form']['genero']:
 		raise ValueError('Genero no reconocido.')
 	for campo in ETIQUETAS:
@@ -227,16 +226,14 @@ def extraer_resultados(driver, limite):
 	else:
 		estado = 'validacion_formulario'
 	observaciones = {
-		'negativa_pension': 'La calculadora mostro negativa de pension.',
-		'pension_garantizada': 'La calculadora mostro pension minima garantizada.',
-		'resultado_sin_alerta': 'Termino el ciclo normal.',
-		'validacion_formulario': 'El formulario no permitio obtener resultados.',
+		'negativa_pension': 'NEGATIVA',
+		'pension_garantizada': 'GARANTIZADA',
+		'resultado_sin_alerta': 'OK',
+		'validacion_formulario': 'RECHAZADO | formulario sin resultados',
 	}
 	resultado.update(
 		estado_web=estado,
-		observaciones=observaciones.get(estado, 'Alerta no identificada: {}'.format(
-			' '.join(alerta.split())
-		)),
+		observaciones=observaciones.get(estado, 'ALERTA | ' + resumir(alerta)),
 	)
 	return resultado
 
@@ -259,7 +256,7 @@ def ejecutar(configuracion, exploratorio=False):
 		escritor = csv.DictWriter(archivo, fieldnames=columnas)
 		escritor.writeheader()
 		try:
-			for cliente in clientes:
+			for indice, cliente in enumerate(clientes, 1):
 				registro = dict(cliente)
 				registro.update({campo: 'NaN' for campo in COLUMNAS_RESULTADO})
 				registro['edad_retiro_calculo'] = configuracion['form']['edad_retiro']
@@ -269,9 +266,10 @@ def ejecutar(configuracion, exploratorio=False):
 				)
 				try:
 					datos, avisos = preparar_datos(cliente, configuracion, exploratorio)
-					registro['observaciones'] = ' '.join(avisos)
+					registro['observaciones'] = unir('OK', avisos)
 				except (KeyError, ValueError, ArithmeticError) as error:
-					registro.update(estado_web='pendiente_manual', observaciones=str(error))
+					registro.update(estado_web='pendiente_manual',
+									observaciones='DATO INVALIDO | ' + resumir(error))
 				else:
 					# Reutilizamos un navegador y limitamos la espera por cliente.
 					try:
@@ -281,16 +279,18 @@ def ejecutar(configuracion, exploratorio=False):
 						completar_formulario(driver, datos, configuracion, limite)
 						resultado = extraer_resultados(driver, limite)
 						registro.update(resultado)
-						registro['observaciones'] = ' '.join(
-							avisos + [resultado['observaciones']]
-						)
+						registro['observaciones'] = unir(resultado['observaciones'], avisos)
 					except (TimeoutException, WebDriverException) as error:
 						registro['estado_web'] = 'timeout' if isinstance(error, TimeoutException) else 'error_navegador'
-						registro['observaciones'] += ' {}: {}'.format(type(error).__name__, str(error))
+						registro['observaciones'] = (
+							unir('TIMEOUT', avisos) if isinstance(error, TimeoutException)
+							else unir('ERROR', [type(error).__name__] + avisos)
+						)
 				# Guardamos cada cliente para conservar tambien los casos fallidos.
 				escritor.writerow(registro)
 				archivo.flush()
-				print('Cliente {}: {}'.format(cliente['id_cliente'], registro['estado_web']), flush=True)
+				informar('{}/{} | {} | {}'.format(
+					indice, len(clientes), cliente['id_cliente'], registro['observaciones']))
 		finally:
 			# Cerramos el navegador aunque falle una interaccion o la escritura.
 			if driver is not None:
@@ -298,15 +298,35 @@ def ejecutar(configuracion, exploratorio=False):
 	return ruta
 
 
+def informar(mensaje):
+	print('[{}] {}'.format(ETIQUETA_CONSOLA, mensaje), flush=True)
+
+
+def resumir(texto, limite=70):
+	texto = ' '.join(str(texto).split())
+	return texto if len(texto) <= limite else texto[:limite - 3] + '...'
+
+
+def unir(estado, notas):
+	return estado + (' | ' + '; '.join(notas) if notas else '')
+
+
+def validar_entorno():
+	if sys.version_info[:2] != (3, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
+		raise RuntimeError('Ejecute con el entorno virtual compartido: {}'.format(
+			ENTORNO_PROYECTO / 'bin' / 'python'))
+
+
 def main():
+	validar_entorno()
 	argumentos = argparse.ArgumentParser(description='Muestra independiente de ISSSTE.')
 	argumentos.add_argument('--exploratorio', action='store_true',
 							help='Indica una ejecucion exploratoria en consola sin cambiar las reglas del JSON.')
 	opciones = argumentos.parse_args()
 	if opciones.exploratorio:
-		print('Ejecucion exploratoria con las reglas actuales del JSON.')
+		informar('Ejecucion exploratoria con las reglas actuales del JSON.')
 	ruta = ejecutar(cargar_configuracion(), opciones.exploratorio)
-	print('CSV guardado: {}'.format(ruta))
+	informar('CSV guardado: {}'.format(ruta))
 
 
 if __name__ == '__main__':
