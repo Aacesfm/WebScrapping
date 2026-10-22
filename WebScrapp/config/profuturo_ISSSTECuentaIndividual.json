@@ -1,0 +1,38 @@
+{
+  "input": {
+    "path": "../../SyntethicDataGenerator/DataOutput/20261021_172249_771771/clientes_ISSSTE_Cuentas_Individuales.csv",
+    "encoding": "utf-8-sig"
+  },
+  "output": {
+    "path": "../DataOutput/profuturo_ISSSTE_dataset_completo_retiro65.csv",
+    "encoding": "utf-8-sig"
+  },
+  "execution": {
+    "max_clients": 26000,
+    "max_seconds_per_client": 45
+  },
+  "filters": {"regimen_estimado": "ISSSTE", "ley_bandera": "LEY_ISSSTE"},
+  "browser": {
+    "url": "https://afore.profuturo.mx/calculadora",
+    "headless": false
+  },
+  "form": {
+    "date_input_format": "%d/%m/%Y",
+    "edad_retiro": 65,
+    "rounding": {"solidarity_percentage": "half_up"},
+    "fields": {
+      "nombre": ["nombre", "ap_paterno", "ap_materno"],
+      "fecha_nacimiento": "f_nacim",
+      "genero": "genero",
+      "anios_cotizados": "anios_cotizados",
+      "ahorro_voluntario_mensual": "av_mensual",
+      "porcentaje_ahorro_solidario": "porcentaje_ahorro_solidario",
+      "bono_pension": "saldo_bono_pension",
+      "saldo_actual_afore": "saldo_rcv",
+      "salario_mensual": "salario_mensual"
+    },
+    "genero": {"H": "Hombre", "M": "Mujer"},
+    "manual_por_cliente": {},
+    "nota_manual": "Por id_cliente se puede indicar ahorro_solidario (1 o 2). Por defecto se redondea el porcentaje CSV al entero mas cercano (half_up). Retiro a los 65; saldo Afore=saldo_rcv; bono=saldo_bono_pension; aportacion mensual=av_mensual, no saldo_av."
+  }
+}

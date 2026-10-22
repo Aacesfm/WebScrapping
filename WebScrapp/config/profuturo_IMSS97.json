@@ -18,6 +18,9 @@
     "id_field": "id_cliente"
   },
   "missing_value": "NaN",
+  "results": {
+    "retirement_age": 65
+  },
   "observaciones": {
     "normal": "Termino el ciclo normal",
     "pop_pension_garantizada": "Se clasifico como pensión mínima garantizada",

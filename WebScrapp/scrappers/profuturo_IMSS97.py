@@ -32,7 +32,7 @@ PATRONES_WEB = {
 	'tasa_rendimiento_web': r'Tasa de Rendimiento\s*(?:\d\s+)?([\d.]+)\s*%',
 	'densidad_cot_web': r'Densidad de cotización\s*(?:\d\s+)?([\d.]+)\s*%',
 }
-COLUMNAS_WEB = list(PATRONES_WEB) + ['observaciones']
+COLUMNAS_WEB = list(PATRONES_WEB) + ['edad_retiro_calculo', 'observaciones']
 CAMPO_CHECKPOINT = 'id_checkpoint'
 
 
@@ -379,6 +379,7 @@ def procesar_cliente(driver, cliente, configuracion):
 	campos = configuracion['form']['fields']
 	registro['nombre_completo'] = obtener_valor(cliente, campos['nombre'])
 	registro.update({columna: faltante for columna in PATRONES_WEB})
+	registro['edad_retiro_calculo'] = configuracion['results']['retirement_age']
 	registro['observaciones'] = faltante
 	registro[CAMPO_CHECKPOINT] = cliente[configuracion['checkpoint']['id_field']]
 	limite = time.monotonic() + configuracion['execution']['max_seconds_per_client']
