@@ -1,0 +1,33 @@
+{
+  "input": {
+    "path": "../../SyntethicDataGenerator/DataOutput/20261021_172249_771771/clientes_IMSS97.csv",
+    "encoding": "utf-8-sig"
+  },
+  "output": {
+    "path": "../DataOutput/banorte_IMSS97_resultados_web.csv",
+    "encoding": "utf-8-sig"
+  },
+  "execution": {
+    "max_clients": 33000,
+    "max_seconds_per_client": 60,
+    "chunk_size": 5,
+    "resume": true
+  },
+  "checkpoint": {
+    "path": "../DataOutput/banorte_IMSS97_checkpoint.json",
+    "id_field": "id_cliente"
+  },
+  "filters": {"regimen_estimado": "IMSS97", "ley_bandera": "LEY_97"},
+  "missing_value": "NaN",
+  "results": {"retirement_age": 65},
+  "browser": {
+    "url": "https://calculadora.xxi-banorte.com/calcula-pension-ley-97/",
+    "headless": false,
+    "page_ready_pause_seconds": 3,
+    "pause_between_records_seconds": 2
+  },
+  "form": {
+    "first_contribution_month_day": "07-01",
+    "contribution_months_per_year": 12
+  }
+}
