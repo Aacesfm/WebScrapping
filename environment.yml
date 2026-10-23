@@ -1,0 +1,6 @@
+name: webscrapping-py388
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8.8
+  - pip

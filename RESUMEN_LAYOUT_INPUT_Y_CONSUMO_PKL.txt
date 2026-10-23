@@ -1,0 +1,320 @@
+RESUMEN DEL LAYOUT DE ENTRADA Y DEL CONSUMO DEL PKL
+Documentación complementaria del generador de casos sintéticos de pensión
+==========================================================================
+
+1. OBJETIVO Y ALCANCE
+--------------------
+Este documento resume el contenido visible en las fotografías de:
+  - EXPLICACION_LAYOUT_INPUT_Y_PKL.csv (abierto en Excel).
+  - RESUMEN_CONSUMO_PKL_GENERADOR_EDITADO.txt (abierto en VS Code).
+
+Ambos describen los insumos empleados por el script:
+  generar_casos_pruebas_completas_editado.py
+
+Sirve como apoyo al documento PROMPT_REPLICAR_GENERADOR_EDITADO.txt:
+permite conservar el esquema de salida, identificar exactamente qué elementos
+se leen de los catálogos y comprender cómo afectan la cobertura de pruebas.
+
+La tabla documentada en el CSV contiene las columnas:
+  seccion | orden | campo_o_clave | origen | uso_en_script | detalle
+
+Las secciones registradas son:
+  INPUT_SCHEMA: 20 campos, todos marcados SI.
+  PKL_USO:       8 claves del catálogo, todas marcadas SI.
+  PKL_NO_USO:   14 claves del catálogo, todas marcadas NO.
+
+IMPORTANTE: el archivo EXPLICACION_LAYOUT_INPUT_Y_PKL.csv documenta la
+estructura y el uso de los datos. No debe confundirse con el CSV que contiene
+los registros de casos sintéticos generados.
+
+2. FUENTES DE DATOS Y ESTRUCTURA
+--------------------------------
+Esquema principal documentado:
+  CASOS_10_PRUEBAS_transformado.csv
+
+Catálogo serializado:
+  input/catalogs_consolidated.pkl
+
+Comportamiento del script según los materiales:
+  - Lee el encabezado del CSV de esquema.
+  - Conserva el orden y los nombres de sus columnas.
+  - Si no existe "Fecha Afiliacion", incorpora esa columna.
+  - Carga el PKL cuando está presente; si no, utiliza un diccionario vacío.
+  - Genera casos de borde, negativos y de aceptación/UAT con los catálogos
+    disponibles y con alternativas definidas en el script.
+
+3. INPUT_SCHEMA: LOS 20 CAMPOS DEL LAYOUT
+-----------------------------------------
+Los campos 1 a 19 provienen del CSV CASOS_10_PRUEBAS_transformado.csv.
+El campo 20 se agrega cuando falta en el archivo de entrada.
+
+01. Nombre completo
+    Uso: SI.
+    Se conserva en la salida; en los nuevos registros se sustituye por una
+    identidad sintética generada para el caso.
+
+02. Correo electronico
+    Uso: SI.
+    Se conserva en el esquema; en los casos nuevos se genera mediante
+    patrones basados en el índice.
+
+03. Celular
+    Uso: SI.
+    En los nuevos casos se genera un número de celular único de 10 dígitos.
+
+04. CURP
+    Uso: SI.
+    Se genera una CURP para los casos nuevos, incluido su dígito verificador.
+
+05. Fecha de nacimiento
+    Uso: SI.
+    En los nuevos registros se deriva de la edad.
+
+06. Genero
+    Uso: SI.
+    Se conserva en el esquema; la etiqueta visible puede variar e incluir
+    "Prefiero no decir".
+
+07. Regimen
+    Uso: SI.
+    Determina las reglas de normalización correspondientes a cada ley o
+    modalidad pensionaria.
+
+08. Salario basico
+    Uso: SI.
+    Participa en barridos de valores frontera y casos negativos/UAT.
+
+09. Semanas cotizadas ante el IMSS
+    Uso: SI.
+    Se utiliza en las validaciones de pensión garantizada (PG) y casos de
+    frontera de semanas.
+
+10. Anos de cotizacion
+    Uso: SI.
+    Se utiliza para ISSSTE y pruebas de consistencia; puede limpiarse según
+    el régimen.
+
+11. Saldo de ahorro para el retiro
+    Uso: SI.
+    Interviene en escenarios de PG y pruebas de montos/saldos monetarios.
+
+12. Saldo de subcuenta de vivienda
+    Uso: SI.
+    Se utiliza en combinaciones de saldos.
+
+13. Saldo de ahorro solidario
+    Uso: SI.
+    Interviene en ISSSTE y en la normalización por régimen.
+
+14. Bono de pension
+    Uso: SI.
+    Se utiliza en ISSSTE y en pruebas con valores extremos.
+
+15. Porcentaje de ahorro solidario
+    Uso: SI.
+    Interviene en ISSSTE y en la normalización por régimen.
+
+16. Saldo ahorro voluntario
+    Uso: SI.
+    Se usa en escenarios de trabajador independiente y pruebas de monotonía.
+
+17. Edad de retiro
+    Uso: SI.
+    Participa en horizontes de edad y validaciones de edad actual frente
+    a edad de retiro.
+
+18. Meta mensual para tu retiro
+    Uso: SI.
+    Se utiliza en escenarios de PG y UAT.
+
+19. Ahorro mensual adicional
+    Uso: SI.
+    Participa en casos de trabajador independiente y otras pruebas.
+
+20. Fecha Afiliacion
+    Uso: SI.
+    Origen: NO VIENE EN INPUT (se agrega).
+    La función _read_schema() la incorpora si no existe. Se calcula para
+    IMSS Ley 73 y Ley 97, y queda vacía para ISSSTE e Independiente.
+
+Nota de fidelidad: se respetan los nombres de los campos tal como aparecen
+visibles en la hoja de cálculo, sin sustituirlos por convenciones distintas.
+
+4. PKL_USO: LAS 8 CLAVES QUE SÍ CONSUME EL SCRIPT
+-------------------------------------------------
+Origen común: catalogs_consolidated.pkl
+
+A. cuota_social
+   Tipo esperado: lista de diccionarios.
+   Campos leídos por registro: limite_inf, limite_sup.
+   Uso: construir fronteras salariales para pruebas de bordes.
+   Bloques: B4 (fronteras de salario); influencia indirecta sobre la
+   cobertura global de salarios en B15.
+
+B. porc_contribucion
+   Tipo esperado: lista de diccionarios.
+   Campos leídos: limite_inf, limite_sup.
+   Uso: añadir fronteras salariales, al igual que cuota_social.
+   Bloque: B4.
+
+C. pg
+   Tipo esperado: lista de diccionarios.
+   Campos leídos:
+     - edad
+     - semanas_min
+     - semanas_max
+     - limite_inf
+     - limite_sup
+     - PG
+   Usos:
+     - Probar combinaciones frontera de semanas y salario por edad.
+     - Calcular un saldo objetivo aproximado PG * 180, incluyendo +/- 1.
+     - Establecer una meta mensual base: max(1000, int(PG)).
+   Bloques: B6_pg_general, B6b_pg_64_65 y referencia de umbral en B15.4.
+
+D. cuantias_incrementos
+   Tipo esperado: lista de diccionarios.
+   Campos leídos: limite_inf, limite_sup.
+   Uso: construir fronteras salariales asociadas a escenarios de Ley 73.
+   Bloque: B7_ley73.
+
+E. cat_pisos_topes_imss
+   Tipo esperado: lista.
+   Lectura: únicamente el primer elemento, si es un diccionario.
+   Campos leídos: limite_inf, limite_sup.
+   Uso: sumar fronteras salariales adicionales.
+   Bloque: B4.
+
+F. cat_pisos_topes_issste
+   Tipo esperado: lista.
+   Lectura: únicamente el primer elemento.
+   Campos leídos: limite_inf, limite_sup.
+   Uso: sumar fronteras salariales adicionales.
+   Bloque: B4.
+
+G. cat_sem_req_imss
+   Tipo esperado: lista.
+   Lectura: únicamente el primer elemento, si es un diccionario.
+   Claves anuales de tipo texto consultadas, cuando existan:
+     "2026", "2027", "2028", "2029", "2030", "2031".
+   Usos:
+     - Obtener semanas IMSS requeridas por año.
+     - Probar req-2 a req+2 y, específicamente, req-1 / req / req+1.
+     - Elegir req_ref para las pruebas UAT prioritarias: valor de 2026,
+       si existe; en su defecto, mínimo disponible o 1000.
+   Bloques: B5 y B15 (subbloques 15.1, 15.2 y 15.4).
+
+H. info_fin
+   Tipo esperado: diccionario, o lista con diccionario en la posición 0.
+   Campos leídos:
+     - edad_laboral_minima
+     - fecha_ley73 (formato esperado YYYY-mm-dd)
+   Usos:
+     - Calcular topes coherentes para años o semanas cotizadas a partir
+       de la edad laboral mínima.
+     - Construir casos en la frontera temporal de elegibilidad de Ley 73.
+   Bloque: B13_nuevas_validaciones.
+
+5. PKL_NO_USO: LAS 14 CLAVES QUE NO SE CONSUMEN
+-----------------------------------------------
+Las siguientes claves pueden existir en catalogs_consolidated.pkl, pero
+según los documentos fotografiados NO se consultan en este generador:
+
+  01. cat_mapeo_request_eafore_73
+  02. cat_mapeo_request_eafore_97
+  03. cat_mapeo_request_eafore_issste
+  04. cat_mapeo_request_portal
+  05. mapeo_inputs
+  06. porcentaje_ley73
+  07. rp
+  08. rps_conjuntas
+  09. rvs
+  10. rvs_conjuntas
+  11. spreads
+  12. costo_sobre_salario
+  13. curvaRealFWD
+  14. lista_excluir
+
+No son necesarias para reproducir exclusivamente el uso del PKL descrito
+para el script de generación de casos.
+
+6. FALLBACKS Y REGLAS DE ACCESO AL CATÁLOGO
+-------------------------------------------
+6.1. Ausencia del archivo PKL
+     Si no existe, _load_catalogs() retorna {}.
+
+6.2. Claves faltantes o tipos inesperados
+     El script debe seguir sus alternativas (defaults), según corresponda:
+
+     a) Fronteras salariales mínimas fijas:
+        0, 1, 10, 100, 1000, 5000, 10000, 20000, 50000, 100000.
+
+     b) Si no hay valores de cat_sem_req_imss:
+        - No se ejecuta el bloque B5 basado en semanas requeridas.
+        - En B15 se utiliza req_ref = 1000.
+
+     c) Si no está disponible info_fin:
+        - edad_laboral_minima = 18.
+        - No se construye la frontera asociada a fecha_ley73.
+
+7. RELACIÓN ENTRE CATÁLOGOS Y BLOQUES DE GENERACIÓN
+--------------------------------------------------
+B4   - Fronteras de salario:
+       cuota_social, porc_contribucion, cat_pisos_topes_imss y
+       cat_pisos_topes_issste.
+
+B5   - Semanas requeridas IMSS por año:
+       cat_sem_req_imss.
+
+B6   - Escenarios generales de pensión garantizada (PG):
+       pg.
+
+B6b  - Casos PG enfocados en edades 64 y 65:
+       pg.
+
+B7   - Escenarios y fronteras de Ley 73:
+       cuantias_incrementos.
+
+B13  - Nuevas validaciones de consistencia y elegibilidad:
+       info_fin.
+
+B15  - Pruebas UAT prioritarias:
+       referencias de cat_sem_req_imss y de pg; cobertura de fronteras
+       salariales provenientes, indirectamente, de cuota_social.
+
+8. CONCLUSIONES OPERATIVAS PARA REPLICAR EL GENERADOR
+------------------------------------------------------
+1) El esquema del CSV define los nombres y el orden de las columnas que
+   deben mantenerse al crear el archivo de casos sintéticos.
+
+2) Son 20 campos finales documentados; el vigésimo, "Fecha Afiliacion",
+   puede no existir en la entrada y debe ser incorporado por el script.
+
+3) Solo 8 claves del PKL son relevantes para este generador. Sus lecturas
+   se concentran en tres propósitos:
+     - Fronteras de salario.
+     - Fronteras de semanas IMSS y PG, según año, edad y condiciones.
+     - Reglas de validación (edad laboral mínima y fecha de Ley 73).
+
+4) El script NO usa el PKL para mapear solicitudes ni para realizar todos
+   los cálculos actuariales. El objetivo documentado es generar casos de
+   prueba con cobertura de bordes, negativos y UAT.
+
+5) La ausencia de ciertos datos del PKL no debe impedir la ejecución de
+   los bloques que cuentan con valores de respaldo definidos.
+
+6) El nuevo script debe conservar los nombres de campos y claves exactamente;
+   no debe convertir las 14 claves no utilizadas en dependencias obligatorias.
+
+9. NOTAS DE FIDELIDAD Y LÍMITES DE ESTA SÍNTESIS
+------------------------------------------------
+- Fuente: cinco fotografías de pantalla; no se recibió el CSV ni el PKL
+  originales para revisar directamente sus contenidos internos.
+- Se han unificado las filas repetidas entre capturas, sin contarlas dos veces.
+- La nota introductoria del TXT fotografiado y el extremo derecho del resumen
+  ejecutivo aparecen cortados en pantalla. Se ha recuperado y resumido el
+  contenido comprobable, sin reconstruir literalmente esas frases truncadas.
+- Esta síntesis documenta el comportamiento descrito en los materiales; no
+  constituye validación por ejecución del script original.
+
+FIN DEL RESUMEN

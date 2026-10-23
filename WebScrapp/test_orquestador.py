@@ -24,7 +24,9 @@ class OrquestadorTests(unittest.TestCase):
         with patch.object(orquestador, 'ejecutar', return_value=0) as ejecutar:
             codigo = orquestador.main(['--config', str(ruta), '--simular'])
         self.assertEqual(codigo, 0)
-        ejecutar.assert_called_once_with({'profuturo_IMSS97': ['--x']}, simular=True)
+        ejecutar.assert_called_once_with(
+            {'profuturo_IMSS97': ['--x']}, simular=True, secuencial=False,
+        )
 
     def test_bandera_de_consola_sobrescribe_el_json(self):
         ruta = self.escribir_config({
@@ -35,7 +37,9 @@ class OrquestadorTests(unittest.TestCase):
             orquestador.main([
                 '--config', str(ruta), '--profuturo_IMSS97', '0', '--banorte_IMSS97', '1',
             ])
-        ejecutar.assert_called_once_with({'banorte_IMSS97': []}, simular=False)
+        ejecutar.assert_called_once_with(
+            {'banorte_IMSS97': []}, simular=False, secuencial=False,
+        )
 
     def test_json_invalido_se_rechaza(self):
         for scrappers in (
@@ -46,10 +50,67 @@ class OrquestadorTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=scrappers):
                 orquestador.cargar_configuracion(self.escribir_config(scrappers))
 
-    def test_json_del_proyecto_es_valido_y_no_ejecuta_nada_por_defecto(self):
+    def test_json_del_proyecto_es_valido_y_conserva_seleccion_configurada(self):
         scrappers = orquestador.cargar_configuracion()
-        self.assertEqual(len(scrappers), 6)
-        self.assertEqual(sum(datos['ejecutar'] for datos in scrappers.values()), 0)
+        self.assertEqual(len(scrappers), 14)
+        self.assertTrue(all(datos['ejecutar'] in (0, 1) for datos in scrappers.values()))
+
+    def test_all_con_data_dir_enruta_csv_limite_y_headless(self):
+        scrappers = {
+            'profuturo_IMSS73': {'ejecutar': 0, 'argumentos': []},
+            'profuturo_IMSS97': {'ejecutar': 0, 'argumentos': []},
+            'profuturo_ISSSTECuentaIndividual': {'ejecutar': 0, 'argumentos': []},
+            'banorte_IMSS73': {'ejecutar': 0, 'argumentos': []},
+            'banorte_IMSS97': {'ejecutar': 0, 'argumentos': []},
+            'sura_IMSS73': {'ejecutar': 0, 'argumentos': []},
+            'sura_IMSS97': {'ejecutar': 0, 'argumentos': []},
+            'sura_ISSSTECuentaIndividual': {'ejecutar': 0, 'argumentos': []},
+            'coppel_IMSS97': {'ejecutar': 0, 'argumentos': []},
+            'pensionissste_IMSS97': {'ejecutar': 0, 'argumentos': []},
+            'pensionissste_ISSSTE': {'ejecutar': 0, 'argumentos': []},
+            'consar_IMSS97': {'ejecutar': 0, 'argumentos': []},
+            'consar_IMSS73': {'ejecutar': 0, 'argumentos': []},
+            'consar_ISSSTE': {'ejecutar': 0, 'argumentos': []},
+        }
+        config_path = self.escribir_config(scrappers)
+        data_dir = Path(tempfile.mkdtemp())
+        for filename in set(orquestador.ARCHIVOS_ENTRADA.values()):
+            (data_dir / filename).write_text('id_cliente\n1\n', encoding='utf-8')
+
+        with patch.object(orquestador, 'ejecutar', return_value=0) as ejecutar:
+            codigo = orquestador.main([
+                '--config', str(config_path), '--all', '--data-dir', str(data_dir),
+                '--max-clientes', '3', '--timeout', '40', '--headless', '--simular',
+            ])
+
+        self.assertEqual(codigo, 0)
+        seleccionados = ejecutar.call_args.args[0]
+        self.assertEqual(set(seleccionados), set(scrappers))
+        for name, arguments in seleccionados.items():
+            input_index = arguments.index('--input') + 1
+            limit_index = arguments.index('--max-clientes') + 1
+            self.assertEqual(Path(arguments[input_index]).name,
+                             orquestador.ARCHIVOS_ENTRADA[name])
+            self.assertEqual(arguments[limit_index], '3')
+            timeout_index = arguments.index('--timeout') + 1
+            self.assertEqual(arguments[timeout_index], '40')
+            self.assertIn('--headless', arguments)
+
+    def test_ejecucion_secuencial_espera_cada_scraper_antes_de_iniciar_otro(self):
+        events = []
+
+        def start(command, cwd):
+            events.append('inicio')
+            process = Mock()
+            process.wait.side_effect = lambda: events.append('espera') or 0
+            return process
+
+        with patch.object(orquestador.subprocess, 'Popen', side_effect=start):
+            code = orquestador.ejecutar(
+                {'profuturo_IMSS97': [], 'banorte_IMSS97': []}, secuencial=True,
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(events, ['inicio', 'espera', 'inicio', 'espera'])
 
     def test_simulacion_y_seleccion_vacia_no_inician_procesos(self):
         with patch.object(orquestador.subprocess, 'Popen') as iniciar:

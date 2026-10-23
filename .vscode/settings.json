@@ -1,0 +1,8 @@
+{
+"python.defaultInterpreterPath": "${workspaceFolder}/.venv-py388/bin/python",
+"python-envs.defaultEnvManager": "ms-python.python:conda",
+"python-envs.defaultPackageManager": "ms-python.python:conda",
+"chat.tools.terminal.autoApprove": {
+    "/Users/alejandro_aac/Documents/WebScrapping/.venv-py388/bin/python": true
+}
+}

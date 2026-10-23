@@ -1,10 +1,10 @@
 {
   "input": {
-    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_IMSS73.csv",
+    "path": "../../SyntethicDataGenerator/DataOutput/data_20261022_215522_702264/clientes_IMSS73.csv",
     "encoding": "utf-8-sig"
   },
   "output": {
-    "path": "../DataOutput/sura_IMSS73_resultados_web.csv",
+    "path": "../DataOutput/data_20261022_215522_702264_web_direct/sura_IMSS73_resultados_web.csv",
     "encoding": "utf-8-sig"
   },
   "execution": {

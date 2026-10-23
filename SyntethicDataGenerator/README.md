@@ -1,5 +1,110 @@
 # Generador de datos sintéticos
 
+## Entorno Python
+
+El workspace usa Python 3.8.8. En macOS Apple Silicon, crea el entorno nativo ARM
+desde la raíz del workspace e instala las dependencias de ambos proyectos:
+
+```bash
+conda env create -p .venv-py388 -f environment.yml
+conda run -p .venv-py388 python -m pip install -r SyntethicDataGenerator/requirements.txt -r WebScrapp/requirements.txt
+```
+
+En VS Code, selecciona `.venv-py388/bin/python` como intérprete y como kernel del
+notebook `generador_clientes_sinteticos.ipynb`.
+
+## Generador de casos de prueba
+
+Desde la raíz del workspace, ejecuta:
+
+```bash
+conda run -p .venv-py388 python SyntethicDataGenerator/generar_casos_pruebas_completas.py
+```
+
+El script lee los nombres y apellidos de `SyntethicDataGenerator/DataInput/` y
+guarda tres CSV normalizados en una carpeta `data_[Fecha_Hora]` dentro de
+`SyntethicDataGenerator/DataOutput/`. Si falta el CSV de esquema, usa los 22
+encabezados documentados; si falta el PKL, genera los casos con fronteras
+salariales fijas y los fallbacks de semanas/PG.
+
+Para reproducir los identificadores con otra semilla, usa `--seed`:
+
+```bash
+conda run -p .venv-py388 python SyntethicDataGenerator/generar_casos_pruebas_completas.py --seed 42
+```
+
+El layout añade `NSS IMSS sintetico` e `ISSSTE_SINTETICO_FORMATO`. El primero se
+rellena solo para IMSS Ley 73/97 y el segundo solo para ISSSTE; ambos quedan
+vacíos en los demás regímenes. Para ISSSTE no se calcula ni se afirma un dígito
+verificador oficial.
+
+## Identificadores de seguridad social
+
+`identificadores_seguridad_social.py` expone generadores y validadores
+independientes. El NSS IMSS aplica el Luhn indicado y codifica los años de
+nacimiento y afiliación; el prefijo predeterminado `00` es un marcador sintético,
+no una clave oficial. Se puede configurar una lista local de prefijos de prueba
+con `IMSS_SUBDELEGATION_CODES`, separada por comas. Los resultados son
+reproducibles por semilla e índice y se guardan como texto.
+
+El identificador ISSSTE solo garantiza 11 caracteres numéricos, reproducibilidad
+y unicidad en el dataset. No se inventa un algoritmo institucional ni se deriva
+de la CURP.
+
+La validez estructural y, para IMSS, el dígito Luhn no demuestran existencia,
+asignación ni reconocimiento oficial. Ninguno de estos valores debe usarse para
+trámites o identificación real.
+
+Ejemplos de `generar_nss_imss("1980-05-04", "2000-01-01", 1, 42)` y
+`generar_nss_issste_sintetico(1, 42)` (el prefijo IMSS `00` es sintético):
+
+```text
+NSS IMSS sintetico: 00008000432
+ISSSTE_SINTETICO_FORMATO: 21613542717
+```
+
+Las pruebas unitarias se ejecutan desde la raíz del workspace con:
+
+```bash
+conda run -p .venv-py388 python -B -m unittest SyntethicDataGenerator.test_identificadores_seguridad_social
+conda run -p .venv-py388 python -B -m unittest discover -s WebScrapp -p 'test_*.py'
+```
+
+## Envío a WebScrapp
+
+El orquestador queda inactivo por omisión. Para simular la selección de todos
+los scrapers sin abrir navegadores:
+
+```bash
+conda run -p .venv-py388 python WebScrapp/orquestador.py --all --data-dir SyntethicDataGenerator/DataOutput/data_YYYYMMDD_HHMMSS --max-clientes 3 --headless --simular
+```
+
+Para ejecutarlos uno a la vez con tres clientes cada uno, agrega
+`--secuencial` y quita `--simular`. Para ejecutar solo un scraper, reemplaza
+`--all` con su bandera, por ejemplo `--profuturo_IMSS97 1`. Sin `--secuencial`,
+los seleccionados corren en paralelo. Cada corrida crea archivos de resultados
+nuevos en `WebScrapp/DataOutput/`; no reutiliza los CSV/checkpoints históricos.
+El timeout por cliente se puede ampliar con `--timeout 40` cuando la calculadora
+responda lentamente.
+SURA guarda datos enviados a su calculadora, así que las corridas live usan
+identidades sintéticas y pueden detenerse si aparece un CAPTCHA o rechazo.
+
+Validación live del 2026-10-22 con la carpeta
+`data_20261022_215522_702264`: Profuturo IMSS73, Profuturo IMSS97, Profuturo
+ISSSTE, SURA IMSS73 y SURA IMSS97 completaron tres clientes cada uno con estado
+`OK`. Banorte leyó y registró los tres clientes, pero devolvió
+`TIMEOUT | formulario`, también al ampliar el timeout a 40 segundos. Sus entradas
+pasan la validación offline; el timeout ocurre dentro del formulario remoto.
+Los seis CSV y los CSV del reintento Banorte están bajo
+`WebScrapp/DataOutput/data_20261022_215522_702264_web_20261022_215727_777839/`
+y `WebScrapp/DataOutput/data_20261022_215522_702264_web_20261022_220349_720342/`.
+
+Para inspeccionar Banorte de nuevo con ventana visible, usa una salida nueva:
+
+```bash
+conda run -p .venv-py388 python WebScrapp/orquestador.py --banorte_IMSS97 1 --data-dir SyntethicDataGenerator/DataOutput/data_20261022_215522_702264 --max-clientes 3 --timeout 40 --secuencial
+```
+
 ## Estructura
 
 - `generador_clientes_sinteticos.ipynb`: orquesta la carga de insumos, la generación, el control de calidad y la exportación a `DataOutput/`.

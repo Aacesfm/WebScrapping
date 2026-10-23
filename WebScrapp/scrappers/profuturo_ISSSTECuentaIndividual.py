@@ -15,12 +15,11 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-
 RUTA_CONFIGURACION = (
 	Path(__file__).resolve().parents[1]
 	/ 'config' / 'profuturo_ISSSTECuentaIndividual.json'
 )
-ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py388'
 ETIQUETA_CONSOLA = 'PROFUTURO ISSSTE'
 ETIQUETAS = {
 	'anios_cotizados': 'Años que has cotizado',

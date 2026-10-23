@@ -1,10 +1,10 @@
 {
   "input": {
-    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_IMSS97.csv",
+    "path": "../../SyntethicDataGenerator/DataOutput/data_20261022_215522_702264/clientes_IMSS97.csv",
     "encoding": "utf-8-sig"
   },
   "output": {
-    "path": "../DataOutput/banorte_IMSS97_resultados_web.csv",
+    "path": "../DataOutput/data_20261022_215522_702264_web_direct/banorte_IMSS97_resultados_web.csv",
     "encoding": "utf-8-sig"
   },
   "execution": {
@@ -14,7 +14,7 @@
     "resume": true
   },
   "checkpoint": {
-    "path": "../DataOutput/banorte_IMSS97_checkpoint.json",
+    "path": "../DataOutput/data_20261022_215522_702264_web_direct/banorte_IMSS97_checkpoint.json",
     "id_field": "id_cliente"
   },
   "filters": {"regimen_estimado": "IMSS97", "ley_bandera": "LEY_97"},

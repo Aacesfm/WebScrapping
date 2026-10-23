@@ -1,0 +1,10 @@
+{
+  "input": {"path": "../../SyntethicDataGenerator/DataOutput/data_20261022_215522_702264/clientes_IMSS97.csv", "encoding": "utf-8-sig"},
+  "output": {"path": "../DataOutput/data_20261022_215522_702264_web_direct/consar_IMSS97_resultados_web.csv", "encoding": "utf-8-sig"},
+  "execution": {"max_clients": 10000, "max_seconds_per_client": 60, "resume": true},
+  "checkpoint": {"storage": "output_csv", "id_field": "id_cliente"},
+  "filters": {"regimen_estimado": "IMSS97", "ley_bandera": "LEY_97"},
+  "results": {"retirement_age": 65},
+  "browser": {"url": "https://www.consar.gob.mx/gobmx/aplicativo/calculadora/imss/", "headless": false, "window_size": "1440,1100"},
+  "form": {"afore": "Banamex", "afore_value": "552", "include_av_in_initial_balance": false}
+}

@@ -14,13 +14,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-
 RUTA_CONFIGURACION = (
     Path(__file__).resolve().parents[1]
     / 'config'
     / 'profuturo_IMSS73.json'
 )
-ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py38'
+ENTORNO_PROYECTO = Path(__file__).resolve().parents[2] / '.venv-py388'
 ETIQUETA = 'PROFUTURO IMSS73'
 TEXTO_ULTIMO_SALARIO = 'Último salario cotizado'
 CAMPO_CHECKPOINT = 'id_checkpoint'
@@ -48,7 +47,7 @@ def resumir(texto, limite=70):
 
 
 def validar_entorno():
-    if sys.version_info[:2] != (3, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
+    if sys.version_info[:3] != (3, 8, 8) or Path(sys.prefix).resolve() != ENTORNO_PROYECTO.resolve():
         raise RuntimeError('Ejecute con el entorno virtual compartido: {}'.format(
             ENTORNO_PROYECTO / 'bin' / 'python'))
 

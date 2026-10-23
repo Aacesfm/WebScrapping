@@ -1,0 +1,254 @@
+OBJETIVO
+Replica en Python (un solo archivo ejecutable) el comportamiento de generar_casos_pruebas_completas_editado.py para producir un CSV de casos sintéticos de pensión con cobertura masiva de fronteras, negativos y UAT. De[TEXTO CORTADO EN LA FOTO]
+
+ALCANCE Y ESTRUCTURA
+1) Crear script con funciones helper + generate() + write_csv() + main().
+2) Usar solo librerías estándar: csv, pickle, random, re, unicodedata, datetime/date/timedelta, pathlib, typing.
+3) Rutas base:
+- BASE_DIR = carpeta del script
+- INPUT_DIR = BASE_DIR/input
+- OUTPUT_DIR = BASE_DIR/output
+- RUN_TS = datetime.now().strftime("%Y%m%d_%H%M%S")
+- OUTFILE = OUTPUT_DIR/CASOS_PRUEBAS_COMPLETAS_<RUN_TS>.csv
+4) Fuentes:
+- SCHEMA_CANDIDATES (en orden):
+  a) input/CASOS_10_PRUEBAS_transformado.csv
+  b) BASE_DIR/CASOS_10_PRUEBAS_transformado.csv
+  c) BASE_DIR/CASOS_PRUEBAS_COMPLETAS.csv
+- CATALOG_PKL = input/catalogs_consolidated.pkl
+- NAMES_CSV = input/nombres_mexico_500.csv
+- SURNAMES_CSV = input/apellidos_mexico_200.csv
+
+CONSTANTES OBLIGATORIAS
+- AGES = [18,20,25,30,35,40,45,47,50,55,56,57,58,59,60,61,62,63,64,65,66,70,75,80,90,100,109,110]
+- RETIRE_AGES = [60,61,62,63,64,65,66,70,75,80]
+- ISSSTE_SERVICE_LEVELS = [5,10,15,20,24,25,26,30,35,40]
+- MAX_TOTAL_CASES = 9800
+- Leyes:
+  LAN_IMSS97 = "IMSS Ley 97"
+  LAN_IMSS73 = "IMSS Ley 73"
+  LAN_ISSSTE = "ISSSTE Cuentas Individuales"
+  LAN_INDEP = "Independiente"
+- EMAIL_DOMAINS = ["gmail.com","hotmail.com","yahoo.com","outlook.com"]
+- DISPLAY_GENDER_ALTERNATIVES = ["Prefiero no decir"]
+- CURP_ENTITY_CODES = ["AS","BC","BS","CC","CL","CM","CS","CH","DF","DG","GT","GR","HG","JC","MC","MN","MS","NT","NL","OC","PL","QT","QR","SP","SL","SR","TC","TS","TL","VZ","YN","ZS","NE"]
+- CURP_COMMON_WORDS, CURP_COMPOUND_SKIP_NAMES y BAD_CURP_WORDS: mismos sets del script original.
+- Estados globales:
+  _USED_EMAILS set
+  _USED_CELLS set
+  _PEOPLE_CACHE dict
+
+ESQUEMA / ENTRADAS
+1) _read_schema():
+- Probar cada SCHEMA_CANDIDATE y codificaciones: utf-8-sig, cp1252, latin-1.
+- Leer header del primer CSV válido.
+- Si falta "Fecha Afiliacion", agregarla al header.
+- Si ninguno sirve: RuntimeError.
+2) _read_csv_dict(path): mismo orden de encodings, retornar lista de dicts, si falla todo RuntimeError.
+3) _load_catalogs(): si no existe PKL, retornar {}. Si existe, pickle.load.
+
+NORMALIZACIÓN Y UTILERÍA
+1) _strip_accents: NFD y quitar categoría Mn.
+2) _only_letters: upper, quitar acentos, reemplazar Ñ por X, dejar A-Z.
+3) _slug: lower sin acentos, dejar a-z0-9.
+4) _safe_num: float(value) o 0.0.
+5) _normalize_gender_label(raw):
+- Mujer/Femenino/F/M => Femenino
+- Hombre/Masculino/H => Masculino
+- otro => Prefiero no decir
+6) _birthdate_from_age(age): "01/07/<año_actual-age>".
+7) _ret_age_for(age, desired): max(desired, age+1).
+8) _letters(n): Excel-like (1=A,27=AA) aunque no se use.
+
+CATÁLOGOS DE PERSONAS
+1) _load_people_catalogs() con cache global.
+2) Leer nombres y apellidos.
+3) Separar nombres por género normalizado.
+4) male_names truncado a 200 (female no truncar).
+5) Fallbacks:
+- male_names vacío => ["Jose"]
+- female_names vacío => ["Maria"]
+- surnames vacío => ["Hernandez","Garcia"]
+
+IDENTIDAD Y CAMPOS PERSONALES (DETERMINÍSTICOS)
+1) _gender_from_idx(idx): par=Masculino, impar=Femenino.
+2) _identity_from_idx(idx):
+- rng = Random((idx*7919)+97)
+- nombre desde pool por género
+- paterno/materno desde catálogo apellidos
+- retornar dict con nombre, paterno, materno, genero, nombre_completo.
+3) _display_gender_from_idx(idx, base_gender):
+- si idx % 150 == 0 => usar alternativa aleatoria con Random((idx*1543)+29) desde DISPLAY_GENDER_ALTERNATIVES.
+- si no, base_gender.
+4) _cell_from_idx(idx):
+- ladas = ["55","56","33","81","222","443","999","664","442","477","449","614","228","229","844","818","667"]
+- rng = Random((idx*10007)+41)
+- generar celular 10 dígitos (lada + sufijo), pad con 0 si faltan.
+- garantizar unicidad con _USED_CELLS.
+5) Email _build_email(...):
+- Construir tokens de nombre/apellidos slugificados.
+- anio = año nacimiento; ult2 = 2 últimos.
+- num = (idx*73)%997 + 1
+- usar lista de 18 patrones en el mismo orden del script.
+- limpiar local con regex [^a-z0-9_], trim _.
+- dominio = EMAIL_DOMAINS[idx % len]
+- si colisiona, agregar sufijo incremental 1..n.
+
+CURP
+1) Implementar:
+- _pick_name_parts, _curp_name_token, _first_internal_vowel, _first_internal_consonant
+- _curp_char_value sobre "0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ"
+- _curp_check_digit con ponderación (18-i)
+2) _build_curp(nombre,paterno,materno,birth_ddmmyyyy,genero_txt,idx):
+- 4 letras iniciales: ap[0], vocal interna ap, am[0], inicial nombre token.
+- si first4 en BAD_CURP_WORDS, reemplazar segundo char por X.
+- fecha yymmdd desde dd/mm/yyyy; fallback 900101 y year_int=1990.
+- género CURP: Masculino->H, Femenino->M, otro->X.
+- estado = CURP_ENTITY_CODES[idx % len]
+- consonantes internas de ap, am, nombre.
+- homoclave: idx%10 si year<2000, si no letra A-Z por idx%26.
+- base17 + dígito verificador => CURP final 18 chars.
+3) _curp_from_idx(idx): identidad idx + birth 20+(idx%60).
+
+AFILIACIÓN
+1) _safe_date_replace_year para manejar 29/feb.
+2) _affiliation_date_for(regimen,birth,idx):
+- Si ISSSTE o Independiente => "".
+- cutoff = 1997-07-01.
+- laboral = birth + 18 años.
+- Ley 73: rango [min(laboral,end), end] con end=cutoff-1 día.
+- Ley 97: rango [max(laboral,cutoff+1), max(start,today)].
+- offset determinístico: (idx*17)%(span+1).
+- formato dd/mm/YYYY.
+
+BASE CASE
+_base_case(idx, regimen, age, retire_age) debe crear dict con campos:
+- Nombre completo, Correo electrónico, Celular, CURP
+- Fecha de nacimiento, Fecha Afiliacion, Género, Régimen
+- Salario básico=20000
+- Semanas cotizadas ante el IMSS=1000
+- Años de cotización=25
+- Saldo de ahorro para el retiro=500000
+- Saldo de subcuenta de vivienda=100000
+- Saldo de ahorro solidario=50000
+- Bono de pensión=100000
+- Porcentaje de ahorro solidario=0.01
+- Saldo ahorro voluntario=5000
+- Edad de retiro = _ret_age_for(age, retire_age)
+- Meta mensual para tu retiro=20000
+- Ahorro mensual adicional=1000
+
+NORMALIZACIÓN POR RÉGIMEN ANTES DE AGREGAR
+_normalize_by_regimen(row):
+- IMSS97/73: años cotización=""; bono=0; saldo solidario=0; %solidario=0; semanas default 0 si vacío.
+- ISSSTE: semanas="".
+- Independiente: semanas=""; años=""; bono=0; saldo solidario=0; %solidario="".
+
+DEDUP + INSERCIÓN
+1) _add_case(rows,seen,schema,row): normalizar, proyectar a schema, dedup por tuple(schema).
+2) En generate(), usar add_case(block,row) con:
+- tope MAX_TOTAL_CASES
+- presupuesto por bloque:
+  B1 1300, B2 500, B3 500, B4 700, B5 900, B6 1500, B6b 1000, B7 600, B8 300, B9 500, B10 250, B11 250, B12 150, B13 150, B14 900, B15 900.
+
+CARGA DE CATÁLOGOS NUMÉRICOS
+1) _collect_salary_boundaries(cat):
+- Leer límites inf/sup de cuota_social, porc_contribucion, pg, cuantias_incrementos.
+- Leer límites de primer elemento de cat_pisos_topes_imss y cat_pisos_topes_issste.
+- Agregar anclas {0,1,10,100,1000,5000,10000,20000,50000,100000}.
+2) _collect_week_boundaries(cat):
+- de cat_sem_req_imss[0] tomar años 2026..2031 existentes.
+3) _salary_boundary_cloud(b): [-10,-5,-1,0,1,5,10] con piso 0 y redondeo 2 decimales.
+4) _sample_even(items,max_items): muestreo uniforme por índice redondeado.
+
+GENERACIÓN PRINCIPAL (ORDEN OBLIGATORIO)
+En generate():
+- schema = _read_schema()
+- cat = _load_catalogs()
+- preparar muestreos:
+  sampled_salary_boundaries=12
+  sampled_pg_rows=40
+  sampled_pg_rows_64_65=45 (filtrado edades 64/65)
+  sampled_quantias=10
+- info_fin desde cat["info_fin"] (dict o primer elemento list dict).
+- rows=[], seen=set(), idx=1
+
+Bloques:
+1) B1_horizonte_edad:
+- leyes 4 x AGES x RETIRE_AGES (Indep omite age>70).
+- ajustes especiales ISSSTE e Independiente como en script.
+2) B2_imss_semanas:
+- para cada age: max_w=(age-18)*52
+- semanas: max_w-1,max_w,max_w+1,max_w+500,max_w+1000 para IMSS97/73
+- más impossible_weeks: (30,2000),(35,2500),(40,3000),(25,1800),(18,1200).
+3) B3_issste_servicio:
+- edades <=90
+- servicio candidates = {age-18, age-17, age-18+5, age-18+10,24,25,26} U ISSSTE_SERVICE_LEVELS
+- más imposibles: (30,25),(35,30),(40,35),(25,20).
+4) B4_fronteras_salario:
+- para cada boundary muestreado, nube +/-
+- leyes IMSS97/73/ISSSTE, edades ancla [55,60,65].
+5) B5_sem_req_anio:
+- si sem_req existe: para cada año 2026..2031 disponible y w=req-2..req+2
+- edades 60..65, retiro [60,61,62,63,64,65,66,70], ley IMSS97.
+6) B6_pg_general:
+- iterar sampled_pg_rows
+- bordes semanas/salario/saldo según script
+- pares pg_pairs de cruce y age_shift -1/0/+1
+- setear meta mensual=max(1000,int(PG)).
+6b) B6b_pg_64_65:
+- solo filas edad 64 de sampled_pg_rows_64_65
+- focos semanas, salario bajo, saldo; caso base 64->65.
+7) B7_ley73:
+- fronteras cuantías (edades [50,60,65,75])
+- más barrido semanas [50..3000] y edades [47,50,55,60,65,70,75,80]
+- más modalidad 40 para años objetivo [2026,2028,2030] con deltas sobre año actual.
+8) B8_issste_as:
+- edad [55,60,65,80], años [10,25,40], solid [0,.01,.02], bono [0,100000,1000000].
+9) B9_indep:
+- edades [18,25,35,45,55,60,65,70], retiro [60,62,65,70,80], saldos y AV en listas del script.
+10) B10_saldos:
+- balances [0,1,100,1000,10000,100000,500000,1000000,5000000,10000000]
+- leyes IMSS97/73/ISSSTE y combinaciones de componentes.
+11) B11_monotonia:
+- series crecientes de saldo retiro, AV, semanas IMSS, años ISSSTE y edad retiro.
+12) B12_negativos:
+- inyectar exactamente la lista de 10 casos negativos/inválidos del script.
+13) B13_nuevas_validaciones:
+- edad_laboral_minima desde info_fin (default 18)
+- fixed_caps (4 casos) como en script
+- si info_fin.fecha_ley73 (YYYY-mm-dd) válida: construir 4 casos frontera Ley73 con márgenes -2y, +180d, +5y.
+14) B14_portal_chaos:
+- cruces con fechas raras, géneros raros, regímenes raros, retiro raro, salarios raros.
+- extremos de saldos/campos monetarios, incongruencias de identidad.
+15) B15_uat_prioridades:
+- req_ref = sem_req[2026] o mínimo disponible o 1000
+- 15.1 edad vs retiro (delta 0/1/2/5)
+- 15.2 semanas IMSS97 (req-1/req/req+1 y lista larga)
+- 15.3 Ley73 semanas 499/500/501 + AV
+- 15.4 umbral PG 64->65 con salarios y semanas específicas
+- 15.5 ISSSTE años frontera/incompatibles
+- 15.6 Independiente saldos+aportaciones extremas.
+
+SALIDA
+1) generate() retorna (schema, rows).
+2) write_csv(schema, rows):
+- mkdir output
+- escribir UTF-8 BOM (utf-8-sig), encabezado y filas con DictWriter.
+3) main():
+- schema, rows = generate()
+- write_csv(...)
+- imprimir:
+  "<n> casos generados"
+  ruta de OUTFILE
+
+CRITERIOS DE FIDELIDAD
+1) Mantener mismos nombres de columnas y textos de régimen.
+2) Mantener orden de bloques y reglas de presupuesto por bloque.
+3) Mantener determinismo por idx y semillas exactas.
+4) Mantener deduplicación por fila proyectada al schema.
+5) No simplificar reglas: conservar negativos, caos y UAT prioritario.
+6) No depender de librerías externas.
+
+ENTREGABLE ESPERADO DEL AGENTE
+Un archivo Python ejecutable que, al correr, genere un CSV en output con nombre timestamp y cobertura equivalente del script fuente.

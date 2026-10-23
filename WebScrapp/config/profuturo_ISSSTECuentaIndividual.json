@@ -1,10 +1,10 @@
 {
   "input": {
-    "path": "../../SyntethicDataGenerator/DataOutput/20261022_140742_789740/clientes_ISSSTE_Cuentas_Individuales.csv",
+    "path": "../../SyntethicDataGenerator/DataOutput/data_20261022_215522_702264/clientes_ISSSTE_Cuentas_Individuales.csv",
     "encoding": "utf-8-sig"
   },
   "output": {
-    "path": "../DataOutput/profuturo_ISSSTE_dataset_completo_retiro65.csv",
+    "path": "../DataOutput/data_20261022_215522_702264_web_direct/profuturo_ISSSTECuentaIndividual_resultados_web.csv",
     "encoding": "utf-8-sig"
   },
   "execution": {

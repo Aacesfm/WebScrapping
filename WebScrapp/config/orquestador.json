@@ -1,10 +1,18 @@
 {
   "scrappers": {
-    "profuturo_IMSS73": {"ejecutar": 1, "argumentos": []},
-    "profuturo_IMSS97": {"ejecutar": 1, "argumentos": []},
-    "profuturo_ISSSTECuentaIndividual": {"ejecutar": 1, "argumentos": []},
-    "banorte_IMSS97": {"ejecutar": 1, "argumentos": []},
-    "sura_IMSS73": {"ejecutar": 1, "argumentos": []},
-    "sura_IMSS97": {"ejecutar": 1, "argumentos": []}
+    "profuturo_IMSS73": {"ejecutar": 0, "argumentos": []},
+    "profuturo_IMSS97": {"ejecutar": 0, "argumentos": []},
+    "profuturo_ISSSTECuentaIndividual": {"ejecutar": 0, "argumentos": []},
+    "banorte_IMSS73": {"ejecutar": 0, "argumentos": []},
+    "banorte_IMSS97": {"ejecutar": 0, "argumentos": []},
+    "sura_IMSS73": {"ejecutar": 0, "argumentos": []},
+    "sura_IMSS97": {"ejecutar": 0, "argumentos": []},
+    "sura_ISSSTECuentaIndividual": {"ejecutar": 0, "argumentos": []},
+    "coppel_IMSS97": {"ejecutar": 0, "argumentos": []},
+    "pensionissste_IMSS97": {"ejecutar": 1, "argumentos": []},
+    "pensionissste_ISSSTE": {"ejecutar": 1, "argumentos": []},
+    "consar_IMSS97": {"ejecutar": 1, "argumentos": []},
+    "consar_IMSS73": {"ejecutar": 1, "argumentos": []},
+    "consar_ISSSTE": {"ejecutar": 1, "argumentos": []}
   }
 }
